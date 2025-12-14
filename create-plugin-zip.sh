@@ -4,7 +4,7 @@
 PLUGIN_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PLUGIN_NAME="lazychat"
 MAIN_FILE="lazychat.php"
-DESTINATION_DIR="/Users/habib/Documents/Woo Pluggin"
+DESTINATION_DIR="/Users/habib/Documents/woo_pluggin"
 
 # Colors for output
 GREEN='\033[0;32m'
