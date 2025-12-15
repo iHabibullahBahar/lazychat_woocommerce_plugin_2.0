@@ -266,6 +266,88 @@ class LazyChat_REST_API {
             )
         ));
         
+        // Categories endpoint with pagination
+        register_rest_route($this->namespace, '/categories', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'get_categories'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'page' => array(
+                    'default' => 1,
+                    'sanitize_callback' => 'absint',
+                    'validate_callback' => function($param) {
+                        return is_numeric($param) && $param > 0;
+                    }
+                ),
+                'per_page' => array(
+                    'default' => 10,
+                    'sanitize_callback' => 'absint',
+                    'validate_callback' => function($param) {
+                        return is_numeric($param) && $param > 0 && $param <= 100;
+                    }
+                ),
+                'hide_empty' => array(
+                    'default' => false,
+                    'sanitize_callback' => function($param) {
+                        return filter_var($param, FILTER_VALIDATE_BOOLEAN);
+                    }
+                ),
+                'orderby' => array(
+                    'default' => 'name',
+                    'sanitize_callback' => 'sanitize_text_field',
+                    'validate_callback' => function($param) {
+                        return in_array($param, array('name', 'slug', 'count', 'id', 'term_id'));
+                    }
+                ),
+                'order' => array(
+                    'default' => 'ASC',
+                    'sanitize_callback' => 'sanitize_text_field',
+                    'validate_callback' => function($param) {
+                        return in_array(strtoupper($param), array('ASC', 'DESC'));
+                    }
+                ),
+                'consumer_key' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+                'consumer_secret' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+            )
+        ));
+        
+        // Attributes endpoint with pagination
+        register_rest_route($this->namespace, '/attributes', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'get_attributes'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'page' => array(
+                    'default' => 1,
+                    'sanitize_callback' => 'absint',
+                    'validate_callback' => function($param) {
+                        return is_numeric($param) && $param > 0;
+                    }
+                ),
+                'per_page' => array(
+                    'default' => 10,
+                    'sanitize_callback' => 'absint',
+                    'validate_callback' => function($param) {
+                        return is_numeric($param) && $param > 0 && $param <= 100;
+                    }
+                ),
+                'consumer_key' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+                'consumer_secret' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+            )
+        ));
+        
         // Test connection endpoint
         register_rest_route($this->namespace, '/test-connection', array(
             'methods' => 'POST',
@@ -709,6 +791,49 @@ class LazyChat_REST_API {
             'statuses' => $formatted_statuses,
             'total' => count($formatted_statuses)
         ));
+    }
+    
+    /**
+     * Get categories with pagination
+     */
+    public function get_categories($request) {
+        $body = $request->get_json_params();
+        if (empty($body)) {
+            $body = array();
+        }
+        
+        $args = array(
+            'page' => isset($body['page']) ? absint($body['page']) : 1,
+            'per_page' => isset($body['per_page']) ? absint($body['per_page']) : 10,
+            'hide_empty' => isset($body['hide_empty']) ? (bool)$body['hide_empty'] : false,
+            'orderby' => isset($body['orderby']) ? sanitize_text_field($body['orderby']) : 'name',
+            'order' => isset($body['order']) ? sanitize_text_field($body['order']) : 'ASC'
+        );
+        
+        // Get categories from controller
+        $result = LazyChat_Category_Controller::get_categories($args);
+        
+        return rest_ensure_response($result);
+    }
+    
+    /**
+     * Get attributes with pagination
+     */
+    public function get_attributes($request) {
+        $body = $request->get_json_params();
+        if (empty($body)) {
+            $body = array();
+        }
+        
+        $args = array(
+            'page' => isset($body['page']) ? absint($body['page']) : 1,
+            'per_page' => isset($body['per_page']) ? absint($body['per_page']) : 10
+        );
+        
+        // Get attributes from controller
+        $result = LazyChat_Attribute_Controller::get_attributes($args);
+        
+        return rest_ensure_response($result);
     }
     
     /**
