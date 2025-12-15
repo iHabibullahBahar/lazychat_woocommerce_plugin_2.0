@@ -1042,8 +1042,8 @@ class LazyChat_Ajax_Handlers {
             return;
         }
 
-        // Use AWS API endpoint
-        $endpoint = 'https://d0nhymc226.execute-api.ap-southeast-1.amazonaws.com/Prod/woocommerce/product-sync';
+        // Use LazyChat API endpoint
+        $endpoint = 'https://app.lazychat.io/api/woocommerce-plugin/sync-products';
 
         $response = wp_remote_post($endpoint, array(
             'method' => 'POST',
