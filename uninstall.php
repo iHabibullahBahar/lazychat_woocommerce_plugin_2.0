@@ -20,7 +20,6 @@ function lazychat_uninstall_cleanup() {
     // Delete all plugin options
     delete_option('lazychat_bearer_token');
     delete_option('lazychat_enable_products');
-    delete_option('lazychat_enable_orders');
     delete_option('lazychat_enable_connection_test');
     delete_option('lazychat_enable_debug_logging');
     delete_option('lazychat_plugin_active');
@@ -51,7 +50,6 @@ function lazychat_uninstall_cleanup() {
             // Delete options for this site
             delete_option('lazychat_bearer_token');
             delete_option('lazychat_enable_products');
-            delete_option('lazychat_enable_orders');
             delete_option('lazychat_enable_connection_test');
             delete_option('lazychat_enable_debug_logging');
             delete_option('lazychat_plugin_active');

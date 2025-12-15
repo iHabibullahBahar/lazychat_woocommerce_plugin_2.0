@@ -480,8 +480,15 @@ class LazyChat_Ajax_Handlers {
         // Generate test data based on webhook type
         $test_data = $this->generate_test_data($webhook_type);
         
-        // Determine endpoint
-        $endpoint = ($webhook_type === 'product') ? '/products/create' : '/orders/create';
+        // Determine endpoint - only support product
+        if ($webhook_type !== 'product') {
+            wp_send_json_error(array(
+                'message' => __('Only product webhooks are supported', 'lazychat')
+            ));
+            return;
+        }
+        
+        $endpoint = '/products/create';
         $test_url = rtrim($api_url, '/') . $endpoint;
         
         // Prepare payload
@@ -690,167 +697,8 @@ class LazyChat_Ajax_Handlers {
                 'brands' => array()
             );
         } else {
-            $test_id = 'test_' . time();
-            $current_time = current_time('Y-m-d\TH:i:s');
-            $current_time_gmt = gmdate('Y-m-d\TH:i:s');
-            
-            return array(
-                'id' => $test_id,
-                'parent_id' => 0,
-                'number' => 'TEST-' . time(),
-                'order_key' => 'wc_order_test_' . time(),
-                'created_via' => 'rest-api',
-                'version' => '1.0.0',
-                'status' => 'processing',
-                'currency' => get_woocommerce_currency(),
-                'date_created' => $current_time,
-                'date_created_gmt' => $current_time_gmt,
-                'date_modified' => $current_time,
-                'date_modified_gmt' => $current_time_gmt,
-                'discount_total' => '5.00',
-                'discount_tax' => '0.00',
-                'shipping_total' => '10.00',
-                'shipping_tax' => '2.00',
-                'cart_tax' => '5.00',
-                'total' => '112.00',
-                'total_tax' => '7.00',
-                'prices_include_tax' => false,
-                'customer_id' => 0,
-                'customer_ip_address' => '127.0.0.1',
-                'customer_user_agent' => 'Mozilla/5.0 (Test User Agent)',
-                'customer_note' => 'This is a test order for LazyChat webhook testing',
-                'billing' => array(
-                    'first_name' => 'John',
-                    'last_name' => 'Doe',
-                    'company' => 'LazyChat Test Inc.',
-                    'address_1' => '123 Test Street',
-                    'address_2' => 'Suite 100',
-                    'city' => 'Test City',
-                    'state' => 'CA',
-                    'postcode' => '90210',
-                    'country' => 'US',
-                    'email' => 'john.doe@example.com',
-                    'phone' => '+1-555-123-4567'
-                ),
-                'shipping' => array(
-                    'first_name' => 'John',
-                    'last_name' => 'Doe',
-                    'company' => 'LazyChat Test Inc.',
-                    'address_1' => '123 Test Street',
-                    'address_2' => 'Suite 100',
-                    'city' => 'Test City',
-                    'state' => 'CA',
-                    'postcode' => '90210',
-                    'country' => 'US'
-                ),
-                'payment_method' => 'bacs',
-                'payment_method_title' => 'Direct Bank Transfer',
-                'transaction_id' => 'TEST-TXN-' . time(),
-                'date_paid' => $current_time,
-                'date_paid_gmt' => $current_time_gmt,
-                'date_completed' => null,
-                'date_completed_gmt' => null,
-                'cart_hash' => md5('test_cart_' . time()),
-                'meta_data' => array(
-                    array(
-                        'id' => 1,
-                        'key' => '_test_mode',
-                        'value' => 'yes'
-                    ),
-                    array(
-                        'id' => 2,
-                        'key' => '_test_timestamp',
-                        'value' => time()
-                    )
-                ),
-                'line_items' => array(
-                    array(
-                        'id' => 1,
-                        'name' => 'Test Product',
-                        'product_id' => 100,
-                        'variation_id' => 0,
-                        'quantity' => 2,
-                        'tax_class' => '',
-                        'subtotal' => '40.00',
-                        'subtotal_tax' => '4.00',
-                        'total' => '40.00',
-                        'total_tax' => '4.00',
-                        'taxes' => array(
-                            array(
-                                'id' => 1,
-                                'total' => '4.00',
-                                'subtotal' => '4.00'
-                            )
-                        ),
-                        'meta_data' => array(),
-                        'sku' => 'TEST-PROD-001',
-                        'price' => '20.00'
-                    ),
-                    array(
-                        'id' => 2,
-                        'name' => 'Another Test Product',
-                        'product_id' => 101,
-                        'variation_id' => 0,
-                        'quantity' => 3,
-                        'tax_class' => '',
-                        'subtotal' => '60.00',
-                        'subtotal_tax' => '3.00',
-                        'total' => '55.00',
-                        'total_tax' => '3.00',
-                        'taxes' => array(
-                            array(
-                                'id' => 1,
-                                'total' => '3.00',
-                                'subtotal' => '3.00'
-                            )
-                        ),
-                        'meta_data' => array(),
-                        'sku' => 'TEST-PROD-002',
-                        'price' => '20.00'
-                    )
-                ),
-                'tax_lines' => array(
-                    array(
-                        'id' => 1,
-                        'rate_code' => 'US-CA-TAX-1',
-                        'rate_id' => 1,
-                        'label' => 'Tax',
-                        'compound' => false,
-                        'tax_total' => '7.00',
-                        'shipping_tax_total' => '2.00',
-                        'meta_data' => array()
-                    )
-                ),
-                'shipping_lines' => array(
-                    array(
-                        'id' => 1,
-                        'method_title' => 'Flat Rate',
-                        'method_id' => 'flat_rate',
-                        'total' => '10.00',
-                        'total_tax' => '2.00',
-                        'taxes' => array(
-                            array(
-                                'id' => 1,
-                                'total' => '2.00',
-                                'subtotal' => ''
-                            )
-                        ),
-                        'meta_data' => array()
-                    )
-                ),
-                'fee_lines' => array(),
-                'coupon_lines' => array(
-                    array(
-                        'id' => 1,
-                        'code' => 'TEST5',
-                        'discount' => '5.00',
-                        'discount_tax' => '0.00',
-                        'meta_data' => array()
-                    )
-                ),
-                'refunds' => array(),
-                'set_paid' => true
-            );
+            // Order webhooks are not supported
+            return array();
         }
     }
     

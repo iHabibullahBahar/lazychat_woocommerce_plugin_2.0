@@ -51,12 +51,6 @@ class LazyChat_Admin {
             'default' => 'Yes'
         ));
         
-        register_setting('lazychat_settings', 'lazychat_enable_orders', array(
-            'type' => 'string',
-            'sanitize_callback' => 'sanitize_text_field',
-            'default' => 'Yes'
-        ));
-        
         register_setting('lazychat_settings', 'lazychat_enable_debug_logging', array(
             'type' => 'string',
             'sanitize_callback' => 'sanitize_text_field',
@@ -127,7 +121,6 @@ class LazyChat_Admin {
                 <p><?php esc_html_e('By logging in and using this plugin, you acknowledge and agree that:', 'lazychat'); ?></p>
                 <ul style="list-style: disc; margin-left: 20px;">
                     <li><?php esc_html_e('Product information (names, prices, images, descriptions, SKUs, stock status) will be transmitted to LazyChat\'s servers', 'lazychat'); ?></li>
-                    <li><?php esc_html_e('Order information (order numbers, customer details, shipping addresses, order items) will be transmitted to LazyChat\'s servers', 'lazychat'); ?></li>
                     <li><?php esc_html_e('All data transmission uses secure HTTPS connections with bearer token authentication', 'lazychat'); ?></li>
                     <li><?php esc_html_e('This data is used exclusively to enable AI customer support features', 'lazychat'); ?></li>
                 </ul>
@@ -318,19 +311,6 @@ class LazyChat_Admin {
                                                    name="lazychat_enable_products" 
                                                    value="Yes" 
                                                    <?php checked(get_option('lazychat_enable_products'), 'Yes'); ?>>
-                                            <span class="slider"></span>
-                                        </label>
-                                    </div>
-                                    <div class="lazychat-toggle-field">
-                                        <div class="lazychat-toggle-info">
-                                            <label class="lazychat-toggle-label"><?php esc_html_e('Enable Order Webhooks', 'lazychat'); ?></label>
-                                            <p class="lazychat-toggle-description"><?php esc_html_e('Send order updates to LazyChat automatically', 'lazychat'); ?></p>
-                                        </div>
-                                        <label class="switch">
-                                            <input type="checkbox" 
-                                                   name="lazychat_enable_orders" 
-                                                   value="Yes" 
-                                                   <?php checked(get_option('lazychat_enable_orders'), 'Yes'); ?>>
                                             <span class="slider"></span>
                                         </label>
                                     </div>
