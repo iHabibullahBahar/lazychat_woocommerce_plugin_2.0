@@ -385,13 +385,14 @@ class LazyChat_Admin {
 
                             <!-- REST API Diagnostic Card -->
                             <div class="lazychat-settings-card lazychat-diagnostic-card">
-                                <div class="lazychat-card-header">
+                                <div class="lazychat-card-header lazychat-collapsible-header" style="cursor: pointer;">
                                     <h3 class="lazychat-card-title">
                                         <span class="dashicons dashicons-admin-tools"></span>
                                         <?php esc_html_e('REST API Diagnostic', 'lazychat'); ?>
+                                        <span class="dashicons dashicons-arrow-down-alt2 lazychat-collapse-icon" style="float: right; transition: transform 0.3s;"></span>
                                     </h3>
                                 </div>
-                                <div class="lazychat-card-body">
+                                <div class="lazychat-card-body lazychat-collapsible-content" style="display: none;">
                                     <div class="lazychat-diagnostic-content">
                                         <div class="lazychat-diagnostic-info">
                                             <p class="lazychat-card-description">

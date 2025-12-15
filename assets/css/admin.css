@@ -1366,6 +1366,20 @@ input:checked + .slider:before {
     animation: none;
 }
 
+/* Collapsible section styles */
+.lazychat-collapsible-header {
+    cursor: pointer;
+    user-select: none;
+}
+
+.lazychat-collapse-icon {
+    transition: transform 0.3s ease;
+}
+
+.lazychat-collapse-icon.lazychat-collapsed {
+    transform: rotate(-180deg);
+}
+
 .lazychat-sync-status {
     min-height: 40px;
     padding: 12px;

@@ -118,6 +118,16 @@ jQuery(document).ready(function($) {
             handleContact();
         });
 
+        // Collapsible section toggle
+        $('.lazychat-collapsible-header').on('click', function() {
+            const $header = $(this);
+            const $content = $header.next('.lazychat-collapsible-content');
+            const $icon = $header.find('.lazychat-collapse-icon');
+            
+            $content.slideToggle(300);
+            $icon.toggleClass('lazychat-collapsed');
+        });
+
         // Logout modal handlers
         const $logoutBtn = $('#lazychat_logout');
         if ($logoutBtn.length) {
@@ -696,6 +706,10 @@ jQuery(document).ready(function($) {
                 if (response && response.success) {
                     console.log('✅ Sync initiated successfully!');
                     console.log('Starting progress polling...');
+                    
+                    // Show immediate feedback that sync has started
+                    $status.html('<div class="lazychat-sync-progress"><div class="lazychat-progress-header"><h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600;">🔄 Initiating product sync...</h4></div><div class="lazychat-shimmer-container"><div class="lazychat-shimmer-line"></div><div class="lazychat-shimmer-line"></div></div></div>').show();
+                    
                     // Start polling for progress (button already hidden)
                     startSyncProgressPolling();
                 } else {
@@ -734,20 +748,37 @@ jQuery(document).ready(function($) {
      * Poll sync progress
      */
     let syncProgressInterval = null;
+    let syncProgressTimeout = null;
+    let showLoadingPhase = true;
+    let lastProgressData = null;
 
     function startSyncProgressPolling() {
-        // Clear any existing interval
+        // Clear any existing interval/timeout
         if (syncProgressInterval) {
             clearInterval(syncProgressInterval);
         }
+        if (syncProgressTimeout) {
+            clearTimeout(syncProgressTimeout);
+        }
+
+        // Reset state
+        showLoadingPhase = true;
+        lastProgressData = null;
 
         // Poll immediately first time
         checkSyncProgress();
 
-        // Then poll every 2 seconds
+        // Then poll every 2 seconds during loading phase
         syncProgressInterval = setInterval(function() {
             checkSyncProgress();
         }, 2000);
+
+        // After 6 seconds, end loading phase and show last data
+        syncProgressTimeout = setTimeout(function() {
+            showLoadingPhase = false;
+            displayLastProgressData();
+            // Continue polling every 2 seconds (interval already set above)
+        }, 6000);
     }
 
     function stopSyncProgressPolling() {
@@ -755,6 +786,12 @@ jQuery(document).ready(function($) {
             clearInterval(syncProgressInterval);
             syncProgressInterval = null;
         }
+        if (syncProgressTimeout) {
+            clearTimeout(syncProgressTimeout);
+            syncProgressTimeout = null;
+        }
+        showLoadingPhase = false;
+        lastProgressData = null;
     }
 
     function checkSyncProgress() {
@@ -772,45 +809,75 @@ jQuery(document).ready(function($) {
                 if (response && response.success) {
                     const data = response.data;
                     
-                    if (!data.is_syncing && data.status === 'NO_SYNC') {
-                        // No sync found - never started
-                        stopSyncProgressPolling();
-                        $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message || 'No active sync found.') + '</p></div>');
-                        $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
+                    // Store last progress data
+                    lastProgressData = data;
+                    
+                    // If in loading phase (first 6 seconds), just store data but don't display yet
+                    if (showLoadingPhase) {
+                        // Keep showing loading indicator
                         return;
                     }
-
-                    if (data.is_syncing && data.sync_status === 'IN_PROGRESS') {
-                        // Sync is in progress - hide button
-                        displaySyncProgress(data);
-                        $button.hide();
-                    } else if (!data.is_syncing && data.sync_status === 'COMPLETED') {
-                        // Sync completed - show button
+                    
+                    // After loading phase, display the data
+                    displayProgressData(data);
+                } else {
+                    lastProgressData = response;
+                    if (!showLoadingPhase) {
+                        const errorMessage = response && response.data && response.data.message
+                            ? response.data.message
+                            : '❌ Failed to get sync progress.';
+                        $status.html('<div class="notice notice-error"><p>' + escapeHtml(errorMessage) + '</p></div>');
                         stopSyncProgressPolling();
-                        displaySyncComplete(data);
-                        $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
-                    } else {
-                        // Unknown state
-                        stopSyncProgressPolling();
-                        $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message || 'Sync status unknown.') + '</p></div>');
                         $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
                     }
-                } else {
-                    const errorMessage = response && response.data && response.data.message
-                        ? response.data.message
-                        : '❌ Failed to get sync progress.';
-                    $status.html('<div class="notice notice-error"><p>' + escapeHtml(errorMessage) + '</p></div>');
-                    stopSyncProgressPolling();
-                    $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
                 }
             },
             error: function(xhr, status, error) {
-            console.error('Progress Check Error:', {xhr: xhr, status: status, error: error});
-            $status.html('<div class="notice notice-error"><p>❌ An error occurred while checking sync progress. Error: ' + escapeHtml(error) + '</p></div>');
+                console.error('Progress Check Error:', {xhr: xhr, status: status, error: error});
+                if (!showLoadingPhase) {
+                    $status.html('<div class="notice notice-error"><p>❌ An error occurred while checking sync progress. Error: ' + escapeHtml(error) + '</p></div>');
+                    stopSyncProgressPolling();
+                    $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
+                }
+            }
+        });
+    }
+
+    function displayLastProgressData() {
+        if (!lastProgressData) {
+            return;
+        }
+        
+        displayProgressData(lastProgressData);
+    }
+
+    function displayProgressData(data) {
+        const $button = $('#lazychat_sync_products');
+        const $status = $('#lazychat_sync_status');
+        
+        if (!data.is_syncing && data.status === 'NO_SYNC') {
+            // No sync found - never started
             stopSyncProgressPolling();
+            $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message || 'No active sync found.') + '</p></div>');
+            $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
+            return;
+        }
+
+        if (data.is_syncing && data.sync_status === 'IN_PROGRESS') {
+            // Sync is in progress - hide button and continue polling
+            displaySyncProgress(data);
+            $button.hide();
+        } else if (!data.is_syncing && data.sync_status === 'COMPLETED') {
+            // Sync completed - stop polling immediately and show completion data
+            stopSyncProgressPolling();
+            displaySyncComplete(data);
+            $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
+        } else {
+            // Unknown state
+            stopSyncProgressPolling();
+            $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message || 'Sync status unknown.') + '</p></div>');
             $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
         }
-        });
     }
 
     /**
