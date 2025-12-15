@@ -1205,7 +1205,7 @@ class LazyChat_Ajax_Handlers {
                 'Accept' => 'application/json',
                 'X-Lazychat-Shop-Id' => $shop_id,
             ),
-            'timeout' => 60,
+            'timeout' => 600,
             'sslverify' => true,
             'data_format' => 'body',
         ));
@@ -1227,27 +1227,70 @@ class LazyChat_Ajax_Handlers {
         $response_body = wp_remote_retrieve_body($response);
         $data = json_decode($response_body, true);
 
-        error_log('[LazyChat] Sync Products HTTP ' . $status_code . ' response: ' . substr($response_body, 0, 500));
+        error_log('[LazyChat] Sync Products HTTP ' . $status_code . ' response: ' . $response_body);
+        error_log('[LazyChat] Sync Products Shop ID: ' . $shop_id . ', Bearer Token: ' . substr($bearer_token, 0, 10) . '...');
+        error_log('[LazyChat] Sync Products Decoded Data: ' . print_r($data, true));
 
+        // Check if HTTP status is successful (200-299)
         if ($status_code >= 200 && $status_code < 300) {
-            $message = __('✅ Products synced successfully with LazyChat.', 'lazychat');
+            // AWS API might return different response structures, check for common success patterns
+            $is_success = false;
+            $message = __('✅ Product sync initiated successfully.', 'lazychat');
             
-            if (isset($data['message']) && !empty($data['message'])) {
+            // Check for 'status' = 'success' (LazyChat API format)
+            if (isset($data['status']) && $data['status'] === 'success') {
+                $is_success = true;
+                if (isset($data['message']) && !empty($data['message'])) {
+                    $message = $data['message'];
+                }
+            }
+            // Check for direct 'success' boolean (some APIs use this)
+            elseif (isset($data['success']) && $data['success'] === true) {
+                $is_success = true;
+                if (isset($data['message']) && !empty($data['message'])) {
+                    $message = $data['message'];
+                }
+            }
+            // Check for 'message' field with success indicators
+            elseif (isset($data['message']) && (
+                stripos($data['message'], 'success') !== false || 
+                stripos($data['message'], 'completed') !== false ||
+                stripos($data['message'], 'initiated') !== false
+            )) {
+                $is_success = true;
                 $message = $data['message'];
             }
-
-            if (isset($data['synced_count'])) {
-                /* translators: %d: number of products synced */
-                $message .= ' ' . sprintf(__('(%d products synced)', 'lazychat'), (int) $data['synced_count']);
+            // If HTTP 200 with valid JSON but no clear success indicator, treat as success
+            elseif (is_array($data) && !empty($data)) {
+                $is_success = true;
+                if (isset($data['message'])) {
+                    $message = $data['message'];
+                }
+            }
+            // If HTTP 200 but empty or invalid response, still treat as success
+            else {
+                $is_success = true;
+                $message = __('✅ Product sync request sent successfully.', 'lazychat');
             }
 
-            wp_send_json_success(array(
-                'message' => $message,
-                'synced_count' => isset($data['synced_count']) ? (int) $data['synced_count'] : 0,
-            ));
+            if ($is_success) {
+                error_log('[LazyChat] Sync Products: Success! Message: ' . $message);
+                wp_send_json_success(array(
+                    'message' => $message,
+                    'data' => isset($data['data']) ? $data['data'] : $data,
+                ));
+            } else {
+                // Should not reach here, but handle it anyway
+                error_log('[LazyChat] Sync Products: HTTP 200 but could not determine success');
+                wp_send_json_success(array(
+                    'message' => __('✅ Product sync request sent.', 'lazychat'),
+                    'data' => $data,
+                ));
+            }
         } else {
+            // HTTP error status (400+, 500+)
             $error_message = isset($data['message']) ? $data['message'] : $response_body;
-            $this->log_error('Sync products API returned error status', array('http_code' => $status_code, 'error' => substr($error_message, 0, 500)), 'sync_products.error');
+            $this->log_error('Sync products API returned error status', array('http_code' => $status_code, 'response' => substr($response_body, 0, 500), 'shop_id' => $shop_id), 'sync_products.error');
             wp_send_json_error(array(
                 'message' => sprintf(
                     /* translators: 1: HTTP status code, 2: error message */
@@ -1294,16 +1337,18 @@ class LazyChat_Ajax_Handlers {
         // Use LazyChat base URL for progress endpoint
         $endpoint = 'https://app.lazychat.io/api/woocommerce-plugin/products/sync-progress';
 
-        $response = wp_remote_get($endpoint, array(
-            'method' => 'GET',
+        error_log('[LazyChat] Fetching sync progress from: ' . $endpoint . ' with Bearer Token: ' . substr($bearer_token, 0, 10) . '...');
+
+        $response = wp_remote_post($endpoint, array(
+            'method' => 'POST',
             'headers' => array(
                 'Authorization' => 'Bearer ' . $bearer_token,
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
-                'X-Lazychat-Shop-Id' => $shop_id,
             ),
             'timeout' => 30,
             'sslverify' => true,
+            'body' => json_encode(array()),
         ));
 
         if (is_wp_error($response)) {

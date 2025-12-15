@@ -633,9 +633,15 @@ jQuery(document).ready(function($) {
      * Sync products with LazyChat
      */
     function syncProducts() {
+        console.log('=== SYNC PRODUCTS START ===');
+        
         const $button = $('#lazychat_sync_products');
         const $status = $('#lazychat_sync_status');
         const originalText = $button.data('original-text') || $button.text();
+        
+        console.log('Button found:', $button.length);
+        console.log('Status element found:', $status.length);
+        console.log('Original text:', originalText);
 
         if (!$button.data('original-text')) {
             $button.data('original-text', originalText);
@@ -643,21 +649,32 @@ jQuery(document).ready(function($) {
 
         const bearerToken = $('#lazychat_bearer_token').val();
         const shopId = lazychat_ajax.shop_id;
+        
+        console.log('Bearer Token (first 10 chars):', bearerToken ? bearerToken.substring(0, 10) + '...' : 'NOT FOUND');
+        console.log('Shop ID:', shopId);
+        console.log('AJAX URL:', lazychat_ajax.ajax_url);
+        console.log('Nonce:', lazychat_ajax.nonce);
 
         if (!bearerToken) {
+            console.error('ERROR: Bearer token is missing');
             $status.html('<div class="notice notice-error"><p>❌ Bearer token is missing. Please configure your settings.</p></div>');
             return;
         }
 
         if (!shopId) {
+            console.error('ERROR: Shop ID is missing');
             $status.html('<div class="notice notice-error"><p>❌ Shop ID is missing. Please reconnect your account.</p></div>');
             return;
         }
 
         // Show shimmer effect and hide button
+        console.log('Showing shimmer effect and hiding button...');
         $button.prop('disabled', true).html('<span class="lazychat-shimmer">' + originalText + '</span>').hide();
         $status.html('<div class="lazychat-shimmer-container"><div class="lazychat-shimmer-line"></div><div class="lazychat-shimmer-line"></div></div>').show();
 
+        console.log('Sending AJAX request to WordPress backend...');
+        console.log('Action: lazychat_sync_products');
+        
         // Call AWS API endpoint through WordPress AJAX (server-side) to avoid CORS issues
         $.ajax({
             url: lazychat_ajax.ajax_url,
@@ -666,26 +683,51 @@ jQuery(document).ready(function($) {
                 action: 'lazychat_sync_products',
                 nonce: lazychat_ajax.nonce
             },
+            beforeSend: function() {
+                console.log('AJAX request about to be sent...');
+            },
             success: function(response) {
-                console.log('Sync Response:', response);
+                console.log('=== AJAX SUCCESS ===');
+                console.log('Response received:', response);
+                console.log('Response type:', typeof response);
+                console.log('Response.success:', response ? response.success : 'N/A');
+                console.log('Response.data:', response ? response.data : 'N/A');
                 
                 if (response && response.success) {
+                    console.log('✅ Sync initiated successfully!');
+                    console.log('Starting progress polling...');
                     // Start polling for progress (button already hidden)
                     startSyncProgressPolling();
                 } else {
+                    console.error('❌ Sync failed!');
                     const errorMessage = response && response.data && response.data.message
                         ? response.data.message
                         : '❌ Failed to sync products. Please try again.';
+                    console.error('Error message:', errorMessage);
                     $status.html('<div class="notice notice-error"><p>' + escapeHtml(errorMessage) + '</p></div>');
                     $button.prop('disabled', false).html($button.data('original-text') || originalText).show();
                 }
+                console.log('=== AJAX SUCCESS END ===');
             },
             error: function(xhr, status, error) {
-                console.error('Sync AJAX Error:', {xhr: xhr, status: status, error: error});
+                console.error('=== AJAX ERROR ===');
+                console.error('XHR:', xhr);
+                console.error('XHR status:', xhr.status);
+                console.error('XHR statusText:', xhr.statusText);
+                console.error('XHR responseText:', xhr.responseText);
+                console.error('Status:', status);
+                console.error('Error:', error);
+                console.error('=== AJAX ERROR END ===');
+                
                 $status.html('<div class="notice notice-error"><p>❌ An unexpected error occurred while syncing products. Error: ' + escapeHtml(error) + '</p></div>');
                 $button.prop('disabled', false).html($button.data('original-text') || originalText).show();
+            },
+            complete: function() {
+                console.log('=== AJAX COMPLETE ===');
             }
         });
+        
+        console.log('=== SYNC PRODUCTS END (AJAX sent) ===');
     }
 
     /**
@@ -729,40 +771,40 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 if (response && response.success) {
                     const data = response.data;
-                
-                if (!data.is_syncing && data.status === 'NO_SYNC') {
-                    // No sync found - never started
-                    stopSyncProgressPolling();
-                    $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message || 'No active sync found.') + '</p></div>');
-                    $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
-                    return;
-                }
+                    
+                    if (!data.is_syncing && data.status === 'NO_SYNC') {
+                        // No sync found - never started
+                        stopSyncProgressPolling();
+                        $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message || 'No active sync found.') + '</p></div>');
+                        $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
+                        return;
+                    }
 
-                if (data.is_syncing && data.sync_status === 'IN_PROGRESS') {
-                    // Sync is in progress - hide button
-                    displaySyncProgress(data);
-                    $button.hide();
-                } else if (!data.is_syncing && data.sync_status === 'COMPLETED') {
-                    // Sync completed - show button
-                    stopSyncProgressPolling();
-                    displaySyncComplete(data);
-                    $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
+                    if (data.is_syncing && data.sync_status === 'IN_PROGRESS') {
+                        // Sync is in progress - hide button
+                        displaySyncProgress(data);
+                        $button.hide();
+                    } else if (!data.is_syncing && data.sync_status === 'COMPLETED') {
+                        // Sync completed - show button
+                        stopSyncProgressPolling();
+                        displaySyncComplete(data);
+                        $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
+                    } else {
+                        // Unknown state
+                        stopSyncProgressPolling();
+                        $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message || 'Sync status unknown.') + '</p></div>');
+                        $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
+                    }
                 } else {
-                    // Unknown state
+                    const errorMessage = response && response.data && response.data.message
+                        ? response.data.message
+                        : '❌ Failed to get sync progress.';
+                    $status.html('<div class="notice notice-error"><p>' + escapeHtml(errorMessage) + '</p></div>');
                     stopSyncProgressPolling();
-                    $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message || 'Sync status unknown.') + '</p></div>');
                     $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
                 }
-            } else {
-                const errorMessage = response && response.data && response.data.message
-                    ? response.data.message
-                    : '❌ Failed to get sync progress.';
-                $status.html('<div class="notice notice-error"><p>' + escapeHtml(errorMessage) + '</p></div>');
-                stopSyncProgressPolling();
-                $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
-            }
-        },
-        error: function(xhr, status, error) {
+            },
+            error: function(xhr, status, error) {
             console.error('Progress Check Error:', {xhr: xhr, status: status, error: error});
             $status.html('<div class="notice notice-error"><p>❌ An error occurred while checking sync progress. Error: ' + escapeHtml(error) + '</p></div>');
             stopSyncProgressPolling();
@@ -787,24 +829,25 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 if (response && response.success) {
                     const data = response.data;
-                
-                if (!data.is_syncing && data.status === 'NO_SYNC') {
-                    // No sync found - show message if available
-                    if (data.message) {
-                        $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message) + '</p></div>').show();
+                    
+                    if (!data.is_syncing && data.status === 'NO_SYNC') {
+                        // No sync found - show message if available
+                        if (data.message) {
+                            $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message) + '</p></div>').show();
+                        }
+                        return;
                     }
-                    return;
-                }
 
-                if (data.is_syncing && data.sync_status === 'IN_PROGRESS') {
-                    // Active sync found - start polling and hide button
-                    displaySyncProgress(data);
-                    startSyncProgressPolling();
-                    $('#lazychat_sync_products').hide();
-                } else if (!data.is_syncing && data.sync_status === 'COMPLETED') {
-                    // Show last completed sync info
-                    displayLastSyncInfo(data);
-                    $('#lazychat_sync_products').show();
+                    if (data.is_syncing && data.sync_status === 'IN_PROGRESS') {
+                        // Active sync found - start polling and hide button
+                        displaySyncProgress(data);
+                        startSyncProgressPolling();
+                        $('#lazychat_sync_products').hide();
+                    } else if (!data.is_syncing && data.sync_status === 'COMPLETED') {
+                        // Show last completed sync info
+                        displayLastSyncInfo(data);
+                        $('#lazychat_sync_products').show();
+                    }
                 }
             },
             error: function(xhr, status, error) {
