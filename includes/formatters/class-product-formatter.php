@@ -37,7 +37,7 @@ class LazyChat_Product_Formatter {
             'sku' => $product->get_sku(),
             'price' => $product->get_price() ?: '0',
             'regular_price' => $product->get_regular_price() ?: '0',
-            'sale_price' => $product->get_sale_price() ?: '0',
+            'sale_price' => $product->get_sale_price() ?: '',
             'date_on_sale_from' => self::format_date($product->get_date_on_sale_from(), false),
             'date_on_sale_to' => self::format_date($product->get_date_on_sale_to(), false),
             'on_sale' => $product->is_on_sale(),
