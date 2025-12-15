@@ -249,7 +249,7 @@ class LazyChat_Product_Formatter {
                 'sku' => $variation->get_sku(),
                 'price' => $variation->get_price() ?: '0',
                 'regular_price' => $variation->get_regular_price() ?: '0',
-                'sale_price' => $variation->get_sale_price() ?: '0',
+                'sale_price' => $variation->get_sale_price() ?: '',
                 'date_on_sale_from' => self::format_date($variation->get_date_on_sale_from(), false),
                 'date_on_sale_to' => self::format_date($variation->get_date_on_sale_to(), false),
                 'on_sale' => $variation->is_on_sale(),
