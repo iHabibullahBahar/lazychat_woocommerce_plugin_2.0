@@ -1187,7 +1187,15 @@ class LazyChat_Ajax_Handlers {
             return;
         }
 
-        $endpoint = 'https://app.lazychat.io/api/woocommerce-plugin/products/sync';
+        $shop_id = get_option('lazychat_selected_shop_id');
+        if (empty($shop_id)) {
+            $this->log_error('Sync products failed: Shop ID missing', array('action' => 'sync_products'), 'sync_products.error');
+            wp_send_json_error(array('message' => __('Shop ID is missing. Please reconnect your account.', 'lazychat')));
+            return;
+        }
+
+        // Use AWS API endpoint
+        $endpoint = 'https://d0nhymc226.execute-api.ap-southeast-1.amazonaws.com/Prod/woocommerce/product-sync';
 
         $response = wp_remote_post($endpoint, array(
             'method' => 'POST',
@@ -1195,6 +1203,7 @@ class LazyChat_Ajax_Handlers {
                 'Authorization' => 'Bearer ' . $bearer_token,
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
+                'X-Lazychat-Shop-Id' => $shop_id,
             ),
             'timeout' => 60,
             'sslverify' => true,
@@ -1275,7 +1284,15 @@ class LazyChat_Ajax_Handlers {
             return;
         }
 
-        $endpoint = 'https://app.lazychat.io/api/woocommerce-plugin/products/sync/progress';
+        $shop_id = get_option('lazychat_selected_shop_id');
+        if (empty($shop_id)) {
+            $this->log_error('Sync progress failed: Shop ID missing', array('action' => 'sync_progress'), 'sync_progress.error');
+            wp_send_json_error(array('message' => __('Shop ID is missing. Please reconnect your account.', 'lazychat')));
+            return;
+        }
+
+        // Use LazyChat base URL for progress endpoint
+        $endpoint = 'https://app.lazychat.io/api/woocommerce-plugin/products/sync-progress';
 
         $response = wp_remote_get($endpoint, array(
             'method' => 'GET',
@@ -1283,6 +1300,7 @@ class LazyChat_Ajax_Handlers {
                 'Authorization' => 'Bearer ' . $bearer_token,
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
+                'X-Lazychat-Shop-Id' => $shop_id,
             ),
             'timeout' => 30,
             'sslverify' => true,

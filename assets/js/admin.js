@@ -641,10 +641,24 @@ jQuery(document).ready(function($) {
             $button.data('original-text', originalText);
         }
 
+        const bearerToken = $('#lazychat_bearer_token').val();
+        const shopId = lazychat_ajax.shop_id;
+
+        if (!bearerToken) {
+            $status.html('<div class="notice notice-error"><p>❌ Bearer token is missing. Please configure your settings.</p></div>');
+            return;
+        }
+
+        if (!shopId) {
+            $status.html('<div class="notice notice-error"><p>❌ Shop ID is missing. Please reconnect your account.</p></div>');
+            return;
+        }
+
         // Show shimmer effect and hide button
         $button.prop('disabled', true).html('<span class="lazychat-shimmer">' + originalText + '</span>').hide();
         $status.html('<div class="lazychat-shimmer-container"><div class="lazychat-shimmer-line"></div><div class="lazychat-shimmer-line"></div></div>').show();
 
+        // Call AWS API endpoint through WordPress AJAX (server-side) to avoid CORS issues
         $.ajax({
             url: lazychat_ajax.ajax_url,
             type: 'POST',
@@ -653,6 +667,8 @@ jQuery(document).ready(function($) {
                 nonce: lazychat_ajax.nonce
             },
             success: function(response) {
+                console.log('Sync Response:', response);
+                
                 if (response && response.success) {
                     // Start polling for progress (button already hidden)
                     startSyncProgressPolling();
@@ -665,6 +681,7 @@ jQuery(document).ready(function($) {
                 }
             },
             error: function(xhr, status, error) {
+                console.error('Sync AJAX Error:', {xhr: xhr, status: status, error: error});
                 $status.html('<div class="notice notice-error"><p>❌ An unexpected error occurred while syncing products. Error: ' + escapeHtml(error) + '</p></div>');
                 $button.prop('disabled', false).html($button.data('original-text') || originalText).show();
             }
@@ -712,39 +729,45 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 if (response && response.success) {
                     const data = response.data;
-                    
-                    if (!data.is_active && data.status === 'no_sync') {
-                        // No sync found - might have completed or never started
-                        stopSyncProgressPolling();
-                        $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message || 'No active sync found.') + '</p></div>');
-                        $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
-                        return;
-                    }
-
-                    if (data.is_active) {
-                        // Sync is in progress - hide button
-                        displaySyncProgress(data);
-                        $button.hide();
-                    } else {
-                        // Sync completed - show button
-                        stopSyncProgressPolling();
-                        displaySyncComplete(data);
-                        $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
-                    }
-                } else {
-                    const errorMessage = response && response.data && response.data.message
-                        ? response.data.message
-                        : '❌ Failed to get sync progress.';
-                    $status.html('<div class="notice notice-error"><p>' + escapeHtml(errorMessage) + '</p></div>');
+                
+                if (!data.is_syncing && data.status === 'NO_SYNC') {
+                    // No sync found - never started
                     stopSyncProgressPolling();
+                    $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message || 'No active sync found.') + '</p></div>');
+                    $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
+                    return;
+                }
+
+                if (data.is_syncing && data.sync_status === 'IN_PROGRESS') {
+                    // Sync is in progress - hide button
+                    displaySyncProgress(data);
+                    $button.hide();
+                } else if (!data.is_syncing && data.sync_status === 'COMPLETED') {
+                    // Sync completed - show button
+                    stopSyncProgressPolling();
+                    displaySyncComplete(data);
+                    $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
+                } else {
+                    // Unknown state
+                    stopSyncProgressPolling();
+                    $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message || 'Sync status unknown.') + '</p></div>');
                     $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
                 }
-            },
-            error: function(xhr, status, error) {
-                $status.html('<div class="notice notice-error"><p>❌ An error occurred while checking sync progress. Error: ' + escapeHtml(error) + '</p></div>');
+            } else {
+                const errorMessage = response && response.data && response.data.message
+                    ? response.data.message
+                    : '❌ Failed to get sync progress.';
+                $status.html('<div class="notice notice-error"><p>' + escapeHtml(errorMessage) + '</p></div>');
                 stopSyncProgressPolling();
                 $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
             }
+        },
+        error: function(xhr, status, error) {
+            console.error('Progress Check Error:', {xhr: xhr, status: status, error: error});
+            $status.html('<div class="notice notice-error"><p>❌ An error occurred while checking sync progress. Error: ' + escapeHtml(error) + '</p></div>');
+            stopSyncProgressPolling();
+            $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
+        }
         });
     }
 
@@ -764,25 +787,24 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 if (response && response.success) {
                     const data = response.data;
-                    
-                    if (!data.is_active && data.status === 'no_sync') {
-                        // No sync found - show message if available
-                        if (data.message) {
-                            $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message) + '</p></div>').show();
-                        }
-                        return;
+                
+                if (!data.is_syncing && data.status === 'NO_SYNC') {
+                    // No sync found - show message if available
+                    if (data.message) {
+                        $status.html('<div class="notice notice-info"><p>' + escapeHtml(data.message) + '</p></div>').show();
                     }
+                    return;
+                }
 
-                    if (data.is_active) {
-                        // Active sync found - start polling and hide button
-                        displaySyncProgress(data);
-                        startSyncProgressPolling();
-                        $('#lazychat_sync_products').hide();
-                    } else {
-                        // Show last completed sync info
-                        displayLastSyncInfo(data);
-                        $('#lazychat_sync_products').show();
-                    }
+                if (data.is_syncing && data.sync_status === 'IN_PROGRESS') {
+                    // Active sync found - start polling and hide button
+                    displaySyncProgress(data);
+                    startSyncProgressPolling();
+                    $('#lazychat_sync_products').hide();
+                } else if (!data.is_syncing && data.sync_status === 'COMPLETED') {
+                    // Show last completed sync info
+                    displayLastSyncInfo(data);
+                    $('#lazychat_sync_products').show();
                 }
             },
             error: function(xhr, status, error) {
@@ -794,23 +816,23 @@ jQuery(document).ready(function($) {
 
     function displayLastSyncInfo(data) {
         const $status = $('#lazychat_sync_status');
-        const total = data.total || 0;
-        const done = data.done || 0;
-        const failed = data.failed || 0;
-        const lastCompleted = data.last_fetch_completed || null;
+        const lastSyncAt = data.last_sync_at || null;
+        const message = data.message || null;
 
-        if (!lastCompleted && total === 0) {
+        if (!lastSyncAt) {
             // No sync history at all
             return;
         }
 
         let html = '<div class="notice notice-info">';
 
-        
+        if (message) {
+            html += '<p>' + escapeHtml(message) + '</p>';
+        }
 
-        if (lastCompleted) {
+        if (lastSyncAt) {
             html += '<div style="margin-top: 10px; margin-bottom: 10px; font-size: 12px; color: #666;">';
-            html += '<strong>Last completed:</strong> ' + escapeHtml(lastCompleted);
+            html += '<strong>Last completed:</strong> ' + escapeHtml(lastSyncAt);
             html += '</div>';
         }
 
@@ -820,42 +842,52 @@ jQuery(document).ready(function($) {
 
     function displaySyncProgress(data) {
         const $status = $('#lazychat_sync_status');
-        const percentage = Math.round(data.percentage || 0);
-        const total = data.total || 0;
-        const done = data.done || 0;
-        const failed = data.failed || 0;
-        const remaining = data.remaining || 0;
-        const statusText = data.status || 'in_progress';
-        const messages = formatSyncMessages(data.message);
+        const totalProducts = data.total_products || 0;
+        const currentPage = data.current_page || 0;
+        const totalPages = data.total_pages || 1;
+        const progress = Math.round(data.progress || 0);
+        const statusText = data.sync_status || 'IN_PROGRESS';
+        const errors = data.errors || [];
+        const failedProducts = data.failed_products || [];
+        const startedAt = data.started_at || null;
+        const estimatedTimeRemaining = data.estimated_time_remaining_seconds || null;
 
         let html = '<div class="lazychat-sync-progress">';
         html += '<div class="lazychat-progress-header">';
-        html += '<h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600;">🔄 ' + escapeHtml(statusText === 'in_progress' ? 'Syncing Products...' : statusText) + '</h4>';
+        html += '<h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600;">🔄 ' + escapeHtml(statusText === 'IN_PROGRESS' ? 'Syncing Products...' : statusText) + '</h4>';
         html += '</div>';
         
         html += '<div class="lazychat-progress-bar-container">';
-        html += '<div class="lazychat-progress-bar" style="width: ' + percentage + '%;"></div>';
-        html += '<span class="lazychat-progress-percentage">' + percentage + '%</span>';
+        html += '<div class="lazychat-progress-bar" style="width: ' + progress + '%;"></div>';
+        html += '<span class="lazychat-progress-percentage">' + progress + '%</span>';
         html += '</div>';
 
         html += '<div class="lazychat-progress-stats" style="margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; font-size: 13px;">';
-        html += '<div><strong>Total:</strong> ' + total + '</div>';
-        html += '<div style="color: #28a745;"><strong>Done:</strong> ' + done + '</div>';
-        if (failed > 0) {
-            html += '<div style="color: #dc3545;"><strong>Failed:</strong> ' + failed + '</div>';
+        html += '<div><strong>Total Products:</strong> ' + totalProducts + '</div>';
+        html += '<div><strong>Page:</strong> ' + currentPage + ' / ' + totalPages + '</div>';
+        if (failedProducts.length > 0) {
+            html += '<div style="color: #dc3545;"><strong>Failed:</strong> ' + failedProducts.length + '</div>';
         }
-        html += '<div><strong>Remaining:</strong> ' + remaining + '</div>';
+        if (estimatedTimeRemaining) {
+            html += '<div><strong>ETA:</strong> ' + Math.ceil(estimatedTimeRemaining / 60) + ' min</div>';
+        }
         html += '</div>';
 
-        if (messages) {
-            html += '<div class="lazychat-progress-message" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px; font-size: 12px; color: #666;">';
-            html += messages;
+        if (errors.length > 0) {
+            html += '<div class="lazychat-progress-message" style="margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 12px; color: #856404;">';
+            html += '<strong>Errors:</strong><br>';
+            errors.slice(0, 5).forEach(function(error) {
+                html += '• ' + escapeHtml(error) + '<br>';
+            });
+            if (errors.length > 5) {
+                html += '• ... and ' + (errors.length - 5) + ' more';
+            }
             html += '</div>';
         }
 
-        if (data.last_fetch_completed) {
+        if (startedAt) {
             html += '<div style="margin-top: 10px; font-size: 12px; color: #999;">';
-            html += '<strong>Last completed:</strong> ' + escapeHtml(data.last_fetch_completed);
+            html += '<strong>Started at:</strong> ' + escapeHtml(startedAt);
             html += '</div>';
         }
 
@@ -865,31 +897,19 @@ jQuery(document).ready(function($) {
 
     function displaySyncComplete(data) {
         const $status = $('#lazychat_sync_status');
-        const total = data.total || 0;
-        const done = data.done || 0;
-        const failed = data.failed || 0;
-        const messages = formatSyncMessages(data.message);
+        const message = data.message || 'Product sync has been completed.';
+        const lastSyncAt = data.last_sync_at || null;
 
         let html = '<div class="notice notice-success">';
         html += '<p style="margin: 0 0 10px 0;"><strong>✅ Sync Completed!</strong></p>';
         
         html += '<div style="margin-top: 10px; font-size: 13px;">';
-        html += '<div><strong>Total:</strong> ' + total + '</div>';
-        html += '<div style="color: #28a745;"><strong>Synced:</strong> ' + done + '</div>';
-        if (failed > 0) {
-            html += '<div style="color: #dc3545;"><strong>Failed:</strong> ' + failed + '</div>';
-        }
+        html += escapeHtml(message);
         html += '</div>';
 
-        if (messages) {
-            html += '<div style="margin-top: 10px; padding: 10px; background: #d4edda; border-radius: 4px; font-size: 12px;">';
-            html += messages;
-            html += '</div>';
-        }
-
-        if (data.last_fetch_completed) {
+        if (lastSyncAt) {
             html += '<div style="margin-top: 10px; font-size: 12px; color: #666;">';
-            html += '<strong>Completed at:</strong> ' + escapeHtml(data.last_fetch_completed);
+            html += '<strong>Completed at:</strong> ' + escapeHtml(lastSyncAt);
             html += '</div>';
         }
 

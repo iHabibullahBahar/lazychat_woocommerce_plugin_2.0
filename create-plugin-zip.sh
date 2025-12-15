@@ -107,6 +107,7 @@ if [ -f "$ZIP_FILE" ]; then
     echo ""
     
     echo -e "${GREEN}🎉 All done! Your plugin is ready for submission.${NC}"
+    echo ""
 else
     echo -e "${YELLOW}❌ Error: Failed to create ZIP file${NC}"
     exit 1
