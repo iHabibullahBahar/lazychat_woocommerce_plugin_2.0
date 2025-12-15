@@ -398,11 +398,11 @@ class LazyChat_Admin {
                                                 <?php esc_html_e('If LazyChat is not receiving data, test and fix REST API connectivity here.', 'lazychat'); ?>
                                             </p>
                                             <div class="lazychat-diagnostic-buttons" style="display: flex; gap: 10px; margin-top: 15px;">
-                                                <button type="button" id="lazychat_test_rest_api" class="button button-secondary">
+                                                <button type="button" id="lazychat_test_rest_api" class="lazychat-sync-button">
                                                     <span class="dashicons dashicons-yes-alt"></span>
                                                     <span><?php esc_html_e('Test REST API', 'lazychat'); ?></span>
                                                 </button>
-                                                <button type="button" id="lazychat_fix_rest_api" class="button button-secondary">
+                                                <button type="button" id="lazychat_fix_rest_api" class="lazychat-sync-button">
                                                     <span class="dashicons dashicons-admin-tools"></span>
                                                     <span><?php esc_html_e('Fix REST API', 'lazychat'); ?></span>
                                                 </button>

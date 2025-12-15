@@ -1360,6 +1360,12 @@ input:checked + .slider:before {
     }
 }
 
+/* Prevent rotation for REST API buttons */
+#lazychat_test_rest_api:hover .dashicons,
+#lazychat_fix_rest_api:hover .dashicons {
+    animation: none;
+}
+
 .lazychat-sync-status {
     min-height: 40px;
     padding: 12px;
