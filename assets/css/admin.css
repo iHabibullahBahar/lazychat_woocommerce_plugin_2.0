@@ -1449,14 +1449,14 @@ button.lazychat-action-btn {
     line-height: 1;
 }
 
-/* Primary Button (Save Changes) - Same style as sync button */
+/* Primary Button (Save Changes) - Solid primary color */
 .lazychat-action-btn.button-primary,
 .lazychat-action-btn.button-primary:hover,
 .lazychat-action-btn.button-primary:focus,
 input.lazychat-action-btn.button-primary,
 input.lazychat-action-btn.button-primary:hover,
 input.lazychat-action-btn.button-primary:focus {
-    background: linear-gradient(135deg, #7446f3 0%, #8b5cf6 100%) !important;
+    background: #7446f3 !important;
     color: #fff !important;
     border: none !important;
     box-shadow: 0 2px 8px rgba(116, 70, 243, 0.25) !important;
@@ -1471,7 +1471,7 @@ input.lazychat-action-btn.button-primary:focus {
 
 .lazychat-action-btn.button-primary:hover,
 input.lazychat-action-btn.button-primary:hover {
-    background: linear-gradient(135deg, #6339d1 0%, #7a4ae6 100%) !important;
+    background: #6339d1 !important;
     box-shadow: 0 4px 12px rgba(116, 70, 243, 0.35) !important;
     transform: translateY(-1px);
 }
@@ -1516,6 +1516,28 @@ input.button.button-primary.lazychat-action-btn.large,
     border-radius: 8px !important;
     -webkit-border-radius: 8px !important;
     -moz-border-radius: 8px !important;
+    background: #7446f3 !important;
+    border-color: #7446f3 !important;
+    color: #fff !important;
+    text-shadow: none !important;
+    box-shadow: 0 2px 8px rgba(116, 70, 243, 0.25) !important;
+}
+
+/* Hover state for input submit buttons */
+input[type="submit"].lazychat-action-btn:hover,
+input[type="submit"].lazychat-action-btn.button-primary:hover,
+input[type="submit"].lazychat-action-btn.button-primary.large:hover,
+input.button-primary.lazychat-action-btn:hover,
+input.button-primary.lazychat-action-btn.large:hover,
+input.button.button-primary.lazychat-action-btn:hover,
+input.button.button-primary.lazychat-action-btn.large:hover,
+.lazychat-actions-group input[type="submit"]:hover,
+.lazychat-actions-group input[type="submit"].button-primary:hover,
+.lazychat-actions-group input[type="submit"].button-primary.large:hover {
+    background: #6339d1 !important;
+    border-color: #6339d1 !important;
+    box-shadow: 0 4px 12px rgba(116, 70, 243, 0.35) !important;
+    transform: translateY(-1px);
 }
 
 /* Secondary Buttons (Logout) - Outline button style */
