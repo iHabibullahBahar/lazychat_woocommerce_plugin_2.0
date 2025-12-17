@@ -342,10 +342,9 @@ class LazyChat_Webhook_Sender {
         
         $url = $this->aws_webhook_url;
         
-        // Wrap the data in a payload object with plugin version
+        // Wrap the data in a payload object
         $body_data = array(
-            'payload' => $data,
-            'plugin_version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0'
+            'payload' => $data
         );
         
         // Prepare payload with proper JSON encoding
@@ -363,6 +362,7 @@ class LazyChat_Webhook_Sender {
             'X-Woocommerce-Topic' => $event,
             'X-Woocommerce-Event-Id' => substr(md5(uniqid(rand(), true)), 0, 10),
             'X-Lazychat-Shop-Id' => $shop_id,
+            'X-Plugin-Version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
         );
         
         $args = array(
