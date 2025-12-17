@@ -342,9 +342,10 @@ class LazyChat_Webhook_Sender {
         
         $url = $this->aws_webhook_url;
         
-        // Wrap the data in a payload object
+        // Wrap the data in a payload object with plugin version
         $body_data = array(
-            'payload' => $data
+            'payload' => $data,
+            'plugin_version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0'
         );
         
         // Prepare payload with proper JSON encoding

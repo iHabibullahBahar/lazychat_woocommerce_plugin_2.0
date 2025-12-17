@@ -1052,6 +1052,7 @@ class LazyChat_Ajax_Handlers {
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
                 'X-Lazychat-Shop-Id' => $shop_id,
+                'X-Plugin-Version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
             ),
             'timeout' => 600,
             'sslverify' => true,
@@ -1266,7 +1267,7 @@ class LazyChat_Ajax_Handlers {
             'woocommerce_store_url' => home_url(),
             'woocommerce_consumer_key' => $consumer_key,
             'woocommerce_consumer_secret' => $consumer_secret,
-            'plugin_version' => LAZYCHAT_VERSION,
+            'plugin_version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
         );
 
         $response = wp_remote_post($endpoint, array(

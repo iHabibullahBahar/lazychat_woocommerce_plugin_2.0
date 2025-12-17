@@ -565,6 +565,11 @@ class LazyChat_REST_API {
         // Get products from controller
         $result = LazyChat_Product_Controller::get_products($args);
         
+        // Add plugin version to response
+        if (is_array($result)) {
+            $result['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
+        }
+        
         return rest_ensure_response($result);
     }
     
@@ -590,6 +595,11 @@ class LazyChat_REST_API {
         // Check if product retrieval failed
         if (is_wp_error($product)) {
             return $product;
+        }
+        
+        // Add plugin version to response
+        if (is_array($product)) {
+            $product['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
         }
         
         return rest_ensure_response($product);
@@ -621,6 +631,11 @@ class LazyChat_REST_API {
         // Prepare and return response
         $response_data = LazyChat_Order_Controller::prepare_order_response($order);
         
+        // Add plugin version to response
+        if (is_array($response_data)) {
+            $response_data['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
+        }
+        
         return rest_ensure_response($response_data);
     }
     
@@ -651,6 +666,11 @@ class LazyChat_REST_API {
         // Get orders from controller
         $result = LazyChat_Order_Controller::get_orders($args);
         
+        // Add plugin version to response
+        if (is_array($result)) {
+            $result['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
+        }
+        
         return rest_ensure_response($result);
     }
     
@@ -680,6 +700,11 @@ class LazyChat_REST_API {
         
         // Prepare and return response
         $response_data = LazyChat_Order_Controller::prepare_order_response($order);
+        
+        // Add plugin version to response
+        if (is_array($response_data)) {
+            $response_data['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
+        }
         
         return rest_ensure_response($response_data);
     }
@@ -712,6 +737,11 @@ class LazyChat_REST_API {
         // Prepare and return response
         $response_data = LazyChat_Order_Controller::prepare_order_response($order);
         
+        // Add plugin version to response
+        if (is_array($response_data)) {
+            $response_data['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
+        }
+        
         return rest_ensure_response($response_data);
     }
     
@@ -731,6 +761,11 @@ class LazyChat_REST_API {
         // Check if customer creation failed
         if (is_wp_error($customer)) {
             return $customer;
+        }
+        
+        // Add plugin version to response
+        if (is_array($customer)) {
+            $customer['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
         }
         
         return rest_ensure_response($customer);
@@ -758,6 +793,11 @@ class LazyChat_REST_API {
         // Check if customer retrieval failed
         if (is_wp_error($customer)) {
             return $customer;
+        }
+        
+        // Add plugin version to response
+        if (is_array($customer)) {
+            $customer['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
         }
         
         return rest_ensure_response($customer);
@@ -789,7 +829,8 @@ class LazyChat_REST_API {
         return rest_ensure_response(array(
             'success' => true,
             'statuses' => $formatted_statuses,
-            'total' => count($formatted_statuses)
+            'total' => count($formatted_statuses),
+            'plugin_version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0'
         ));
     }
     
@@ -813,6 +854,11 @@ class LazyChat_REST_API {
         // Get categories from controller
         $result = LazyChat_Category_Controller::get_categories($args);
         
+        // Add plugin version to response
+        if (is_array($result)) {
+            $result['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
+        }
+        
         return rest_ensure_response($result);
     }
     
@@ -833,6 +879,11 @@ class LazyChat_REST_API {
         // Get attributes from controller
         $result = LazyChat_Attribute_Controller::get_attributes($args);
         
+        // Add plugin version to response
+        if (is_array($result)) {
+            $result['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
+        }
+        
         return rest_ensure_response($result);
     }
     
@@ -846,7 +897,7 @@ class LazyChat_REST_API {
             'timestamp' => current_time('mysql'),
             'wordpress_version' => get_bloginfo('version'),
             'woocommerce_version' => defined('WC_VERSION') ? WC_VERSION : 'Not installed',
-            'plugin_version' => LAZYCHAT_VERSION,
+            'plugin_version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
         ));
     }
 }
