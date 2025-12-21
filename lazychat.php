@@ -103,9 +103,6 @@ function lazychat_activate() {
     if (get_option('lazychat_enable_products') === false) {
         update_option('lazychat_enable_products', 'Yes');
     }
-    if (get_option('lazychat_enable_orders') === false) {
-        update_option('lazychat_enable_orders', 'No');
-    }
     if (get_option('lazychat_enable_connection_test') === false) {
         update_option('lazychat_enable_connection_test', 'Yes');
     }

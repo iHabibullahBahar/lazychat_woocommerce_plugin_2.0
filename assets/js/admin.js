@@ -468,7 +468,6 @@ jQuery(document).ready(function($) {
                 bearer_token: bearerToken
             },
             success: function(response) {
-                console.log('Auto Connection Check Response:', response);
                 
                 if (response.success && response.data.connected && response.data.activated) {
                     // Connection verified - notify LazyChat server about activation
@@ -530,7 +529,6 @@ jQuery(document).ready(function($) {
                 enabled: enabled
             },
             success: function(response) {
-                console.log('Toggle Plugin Response:', response);
                 if (response.success) {
                     callback(true);
                 } else {
@@ -573,7 +571,6 @@ jQuery(document).ready(function($) {
                 bearer_token: bearerToken
             },
             success: function(response) {
-                console.log('Check Connection Response:', response);
                 
                 if (response.success) {
                     $results.html('<div class="notice notice-success"><p>' + response.data.message + '</p></div>');
@@ -643,15 +640,9 @@ jQuery(document).ready(function($) {
      * Sync products with LazyChat
      */
     function syncProducts() {
-        console.log('=== SYNC PRODUCTS START ===');
-        
         const $button = $('#lazychat_sync_products');
         const $status = $('#lazychat_sync_status');
         const originalText = $button.data('original-text') || $button.text();
-        
-        console.log('Button found:', $button.length);
-        console.log('Status element found:', $status.length);
-        console.log('Original text:', originalText);
 
         if (!$button.data('original-text')) {
             $button.data('original-text', originalText);
@@ -659,11 +650,6 @@ jQuery(document).ready(function($) {
 
         const bearerToken = $('#lazychat_bearer_token').val();
         const shopId = lazychat_ajax.shop_id;
-        
-        console.log('Bearer Token (first 10 chars):', bearerToken ? bearerToken.substring(0, 10) + '...' : 'NOT FOUND');
-        console.log('Shop ID:', shopId);
-        console.log('AJAX URL:', lazychat_ajax.ajax_url);
-        console.log('Nonce:', lazychat_ajax.nonce);
 
         if (!bearerToken) {
             console.error('ERROR: Bearer token is missing');
@@ -678,12 +664,8 @@ jQuery(document).ready(function($) {
         }
 
         // Show shimmer effect and hide button
-        console.log('Showing shimmer effect and hiding button...');
         $button.prop('disabled', true).html('<span class="lazychat-shimmer">' + originalText + '</span>').hide();
         $status.html('<div class="lazychat-shimmer-container"><div class="lazychat-shimmer-line"></div><div class="lazychat-shimmer-line"></div></div>').show();
-
-        console.log('Sending AJAX request to WordPress backend...');
-        console.log('Action: lazychat_sync_products');
         
         // Call AWS API endpoint through WordPress AJAX (server-side) to avoid CORS issues
         $.ajax({
@@ -693,55 +675,28 @@ jQuery(document).ready(function($) {
                 action: 'lazychat_sync_products',
                 nonce: lazychat_ajax.nonce
             },
-            beforeSend: function() {
-                console.log('AJAX request about to be sent...');
-            },
             success: function(response) {
-                console.log('=== AJAX SUCCESS ===');
-                console.log('Response received:', response);
-                console.log('Response type:', typeof response);
-                console.log('Response.success:', response ? response.success : 'N/A');
-                console.log('Response.data:', response ? response.data : 'N/A');
-                
                 if (response && response.success) {
-                    console.log('✅ Sync initiated successfully!');
-                    console.log('Starting progress polling...');
-                    
                     // Show immediate feedback that sync has started
                     $status.html('<div class="lazychat-sync-progress"><div class="lazychat-progress-header"><h4 style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600;">🔄 Initiating product sync...</h4></div><div class="lazychat-shimmer-container"><div class="lazychat-shimmer-line"></div><div class="lazychat-shimmer-line"></div></div></div>').show();
                     
                     // Start polling for progress (button already hidden)
                     startSyncProgressPolling();
                 } else {
-                    console.error('❌ Sync failed!');
                     const errorMessage = response && response.data && response.data.message
                         ? response.data.message
                         : '❌ Failed to sync products. Please try again.';
-                    console.error('Error message:', errorMessage);
+                    console.error('Sync failed:', errorMessage);
                     $status.html('<div class="notice notice-error"><p>' + escapeHtml(errorMessage) + '</p></div>');
                     $button.prop('disabled', false).html($button.data('original-text') || originalText).show();
                 }
-                console.log('=== AJAX SUCCESS END ===');
             },
             error: function(xhr, status, error) {
-                console.error('=== AJAX ERROR ===');
-                console.error('XHR:', xhr);
-                console.error('XHR status:', xhr.status);
-                console.error('XHR statusText:', xhr.statusText);
-                console.error('XHR responseText:', xhr.responseText);
-                console.error('Status:', status);
-                console.error('Error:', error);
-                console.error('=== AJAX ERROR END ===');
-                
+                console.error('Sync AJAX error:', error, 'Status:', xhr.status);
                 $status.html('<div class="notice notice-error"><p>❌ An unexpected error occurred while syncing products. Error: ' + escapeHtml(error) + '</p></div>');
                 $button.prop('disabled', false).html($button.data('original-text') || originalText).show();
-            },
-            complete: function() {
-                console.log('=== AJAX COMPLETE ===');
             }
         });
-        
-        console.log('=== SYNC PRODUCTS END (AJAX sent) ===');
     }
 
     /**

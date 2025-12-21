@@ -13,7 +13,6 @@ class LazyChat_Webhook_Sender {
     
     private $api_url = 'https://app.lazychat.io/api/woocommerce-plugin';
     private $aws_webhook_url = 'https://d0nhymc226.execute-api.ap-southeast-1.amazonaws.com/Prod/webhooks/woocommerce';
-    //private $aws_webhook_url = 'https://app.lazychat.io/api/woocommerce-plugin/test';
     private $bearer_token;
     private $enable_products;
     private $enable_debug;
