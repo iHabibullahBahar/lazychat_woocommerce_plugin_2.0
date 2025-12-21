@@ -1251,6 +1251,7 @@ class LazyChat_Ajax_Handlers {
                 $rest_api_working = true;
                 $rest_api_message = __('WordPress REST API is working correctly.', 'lazychat');
             } else {
+                /* translators: %d: HTTP status code */
                 $rest_api_message = sprintf(__('WordPress REST API returned unexpected status code: %d', 'lazychat'), $response_code);
             }
         }
@@ -1280,6 +1281,7 @@ class LazyChat_Ajax_Handlers {
                 $lazychat_endpoint_working = true;
                 $lazychat_endpoint_message = __('LazyChat REST API endpoints are properly registered.', 'lazychat');
             } else {
+                /* translators: %d: HTTP status code */
                 $lazychat_endpoint_message = sprintf(__('LazyChat REST API endpoint returned status code: %d', 'lazychat'), $lazychat_response_code);
             }
         }

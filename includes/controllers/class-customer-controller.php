@@ -42,6 +42,7 @@ class LazyChat_Customer_Controller {
                 $user = get_user_by('email', $data['email']);
                 return new WP_Error(
                     'email_exists',
+                    /* translators: %d: Customer ID */
                     sprintf(__('Email address already exists. Customer ID: %d', 'lazychat'), $user->ID),
                     array('status' => 409, 'customer_id' => $user->ID)
                 );
@@ -113,6 +114,7 @@ class LazyChat_Customer_Controller {
             
             return array(
                 'success' => true,
+                /* translators: %d: Customer ID */
                 'message' => sprintf(__('Customer created successfully. Customer ID: %d', 'lazychat'), $customer_id),
                 'id' => $customer_id,
                 'username' => $username,
@@ -216,6 +218,7 @@ class LazyChat_Customer_Controller {
         
         return array(
             'success' => true,
+            /* translators: %d: Customer ID */
             'message' => sprintf(__('Customer retrieved successfully. Customer ID: %d', 'lazychat'), $customer_id),
             'id' => $customer_id,
             'username' => $user->user_login,

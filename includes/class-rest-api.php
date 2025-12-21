@@ -811,6 +811,7 @@ class LazyChat_REST_API {
         $statuses = wc_get_order_statuses();
         
         // Get default order status
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Using WooCommerce core filter
         $default_status = apply_filters('woocommerce_default_order_status', 'pending');
         
         // Format statuses for API response
