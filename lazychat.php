@@ -3,7 +3,7 @@
  * Plugin Name: LazyChat
  * Plugin URI: https://app.lazychat.io
  * Description: Connect your WooCommerce store with LazyChat's AI-powered customer support platform. Automatically sync products and orders via webhooks.
- * Version: 1.3.40
+ * Version: 1.3.41
  * Author: LazyChat
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,7 +24,7 @@ if (!defined('ABSPATH')) {
 
 
 // Define plugin constants
-define('LAZYCHAT_VERSION', '1.3.40');
+define('LAZYCHAT_VERSION', '1.3.41');
 define('LAZYCHAT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LAZYCHAT_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LAZYCHAT_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -318,14 +318,19 @@ function lazychat_send_event_notification($event_type, $event_data = array()) {
         'body' => wp_json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         'headers' => $headers,
         'timeout' => 15,
-        'blocking' => false, // Non-blocking for better performance
+        'blocking' => true, // TEMPORARY: Changed to blocking for debugging
         'data_format' => 'body'
     ));
     
+    // Debug logging
     if (is_wp_error($response)) {
         error_log('[LazyChat] Event notification failed (' . $event_type . '): ' . $response->get_error_message());
         return false;
     }
+    
+    $response_code = wp_remote_retrieve_response_code($response);
+    $response_body = wp_remote_retrieve_body($response);
+    error_log('[LazyChat] Event sent (' . $event_type . ') - Response Code: ' . $response_code . ' - Body: ' . $response_body);
     
     return true;
 }
