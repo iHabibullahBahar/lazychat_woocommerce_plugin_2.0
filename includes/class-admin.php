@@ -72,6 +72,9 @@ class LazyChat_Admin {
             return;
         }
         
+        // Check connection once per visit
+        $this->check_connection_on_page_load();
+        
         wp_enqueue_style(
             'lazychat-admin-style', 
             LAZYCHAT_PLUGIN_URL . 'assets/css/admin.css',
@@ -94,6 +97,36 @@ class LazyChat_Admin {
             'shop_id' => get_option('lazychat_selected_shop_id', ''),
             'base_url' => 'https://app.lazychat.io/api/woocommerce-plugin'
         ));
+    }
+    
+    /**
+     * Check connection to LazyChat once per settings page visit
+     * Sends connection check event notification
+     */
+    private function check_connection_on_page_load() {
+        // Check if already sent this visit
+        $transient_key = 'lazychat_connection_checked_' . get_current_user_id();
+        if (get_transient($transient_key)) {
+            return;
+        }
+        
+        // Get bearer token
+        $bearer_token = get_option('lazychat_bearer_token', '');
+        if (empty($bearer_token)) {
+            return; // Not logged in, no need to check
+        }
+        
+        // Send connection check event
+        if (function_exists('lazychat_send_event_notification')) {
+            lazychat_send_event_notification('settings.checking_connection', array(
+                'user_id' => get_current_user_id(),
+                'user_email' => wp_get_current_user()->user_email,
+                'check_time' => current_time('mysql')
+            ));
+        }
+        
+        // Set transient for 5 minutes (won't send again until user leaves and comes back)
+        set_transient($transient_key, true, 300);
     }
     
     /**

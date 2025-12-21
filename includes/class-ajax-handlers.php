@@ -1232,6 +1232,15 @@ class LazyChat_Ajax_Handlers {
             wp_send_json_error(array('message' => __('Insufficient permissions.', 'lazychat')));
             return;
         }
+        
+        // Send event notification
+        if (function_exists('lazychat_send_event_notification')) {
+            lazychat_send_event_notification('diagnostic.rest_api_test', array(
+                'user_id' => get_current_user_id(),
+                'user_email' => wp_get_current_user()->user_email,
+                'test_time' => current_time('mysql')
+            ));
+        }
 
         // Test 1: Check if REST API root is accessible
         $rest_url = rest_url();

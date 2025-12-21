@@ -468,5 +468,82 @@ class LazyChat_Webhook_Sender {
         return $this->send_debug_data($entity_type, $entity_id, $debug_info);
     }
     
+    /**
+     * Send custom event notification to LazyChat backend
+     * This allows sending various types of events with custom data
+     * 
+     * @param string $event_type The type of event (e.g., 'plugin.updated', 'admin.login', 'custom.action')
+     * @param array $event_data Additional data to send with the event
+     * @return bool Success status
+     */
+    public function send_event($event_type, $event_data = array()) {
+        // Check if bearer token is set
+        if (empty($this->bearer_token)) {
+            $this->log('Cannot send event - Bearer token not configured', array('event_type' => $event_type));
+            return false;
+        }
+        
+        // Prepare the event payload
+        $payload = array(
+            'event_type' => $event_type,
+            'event_data' => $event_data,
+            'site_info' => array(
+                'site_url' => get_site_url(),
+                'site_name' => get_bloginfo('name'),
+                'wordpress_version' => get_bloginfo('version'),
+                'woocommerce_version' => defined('WC_VERSION') ? WC_VERSION : 'N/A',
+                'plugin_version' => LAZYCHAT_VERSION,
+                'php_version' => phpversion(),
+                'timestamp' => current_time('mysql')
+            )
+        );
+        
+        // Get shop ID if available
+        $shop_id = get_option('lazychat_selected_shop_id', '');
+        
+        // API endpoint for event notifications
+        $url = rtrim($this->api_url, '/') . '/events';
+        
+        // Prepare headers
+        $headers = array(
+            'Authorization' => 'Bearer ' . $this->bearer_token,
+            'Content-Type' => 'application/json',
+            'X-Event-Type' => $event_type,
+            'X-Plugin-Version' => LAZYCHAT_VERSION,
+            'X-Lazychat-Shop-Id' => $shop_id,
+            'X-Event-Timestamp' => time()
+        );
+        
+        // Log the event
+        $this->log('Sending event notification', array(
+            'event_type' => $event_type,
+            'event_data_keys' => array_keys($event_data),
+            'url' => $url
+        ));
+        
+        // Send the request
+        $response = wp_remote_post($url, array(
+            'body' => wp_json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            'headers' => $headers,
+            'timeout' => 15,
+            'blocking' => false, // Non-blocking for better performance
+            'data_format' => 'body'
+        ));
+        
+        if (is_wp_error($response)) {
+            $this->log('Event notification failed', array(
+                'event_type' => $event_type,
+                'error' => $response->get_error_message()
+            ));
+            return false;
+        }
+        
+        $this->log('Event notification sent successfully', array(
+            'event_type' => $event_type
+        ));
+        
+        return true;
+    }
+    
 }
 

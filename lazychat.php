@@ -3,7 +3,7 @@
  * Plugin Name: LazyChat
  * Plugin URI: https://app.lazychat.io
  * Description: Connect your WooCommerce store with LazyChat's AI-powered customer support platform. Automatically sync products and orders via webhooks.
- * Version: 1.3.39
+ * Version: 1.3.40
  * Author: LazyChat
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,7 +24,7 @@ if (!defined('ABSPATH')) {
 
 
 // Define plugin constants
-define('LAZYCHAT_VERSION', '1.3.39');
+define('LAZYCHAT_VERSION', '1.3.40');
 define('LAZYCHAT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LAZYCHAT_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LAZYCHAT_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -238,6 +238,99 @@ function lazychat_handle_rest_api_notice_dismissal() {
 add_action('admin_init', 'lazychat_handle_rest_api_notice_dismissal');
 
 /**
+ * Check for plugin updates and notify LazyChat
+ */
+function lazychat_check_plugin_update() {
+    $current_version = LAZYCHAT_VERSION;
+    $stored_version = get_option('lazychat_plugin_version');
+    
+    // If version has changed or not set yet
+    if ($stored_version !== $current_version) {
+        // Update stored version
+        update_option('lazychat_plugin_version', $current_version);
+        
+        // If there was a previous version, this is an update
+        if ($stored_version !== false && $stored_version !== $current_version) {
+            // Send update notification to LazyChat
+            lazychat_send_event_notification('plugin.updated', array(
+                'previous_version' => $stored_version,
+                'new_version' => $current_version,
+                'update_time' => current_time('mysql')
+            ));
+        } else {
+            // First time activation
+            lazychat_send_event_notification('plugin.installed', array(
+                'version' => $current_version,
+                'install_time' => current_time('mysql')
+            ));
+        }
+    }
+}
+
+/**
+ * Send event notification to LazyChat backend
+ * 
+ * @param string $event_type The type of event (e.g., 'plugin.updated', 'admin.login', etc.)
+ * @param array $event_data Additional data to send with the event
+ * @return bool Success status
+ */
+function lazychat_send_event_notification($event_type, $event_data = array()) {
+    // Check if bearer token is set
+    $bearer_token = get_option('lazychat_bearer_token');
+    if (empty($bearer_token)) {
+        error_log('[LazyChat] Cannot send event notification - Bearer token not configured');
+        return false;
+    }
+    
+    // Prepare the event payload
+    $payload = array(
+        'event_type' => $event_type,
+        'event_data' => $event_data,
+        'site_info' => array(
+            'site_url' => get_site_url(),
+            'site_name' => get_bloginfo('name'),
+            'wordpress_version' => get_bloginfo('version'),
+            'woocommerce_version' => defined('WC_VERSION') ? WC_VERSION : 'N/A',
+            'plugin_version' => LAZYCHAT_VERSION,
+            'php_version' => phpversion(),
+            'timestamp' => current_time('mysql')
+        )
+    );
+    
+    // Get shop ID if available
+    $shop_id = get_option('lazychat_selected_shop_id', '');
+    
+    // API endpoint for event notifications
+    $api_url = 'https://app.lazychat.io/api/woocommerce-plugin/events';
+    
+    // Prepare headers
+    $headers = array(
+        'Authorization' => 'Bearer ' . $bearer_token,
+        'Content-Type' => 'application/json',
+        'X-Event-Type' => $event_type,
+        'X-Plugin-Version' => LAZYCHAT_VERSION,
+        'X-Lazychat-Shop-Id' => $shop_id,
+        'X-Event-Timestamp' => time()
+    );
+    
+    // Send the request
+    $response = wp_remote_post($api_url, array(
+        'body' => wp_json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        'headers' => $headers,
+        'timeout' => 15,
+        'blocking' => false, // Non-blocking for better performance
+        'data_format' => 'body'
+    ));
+    
+    if (is_wp_error($response)) {
+        error_log('[LazyChat] Event notification failed (' . $event_type . '): ' . $response->get_error_message());
+        return false;
+    }
+    
+    return true;
+}
+
+/**
  * Initialize the plugin
  */
 function lazychat_init() {
@@ -261,6 +354,9 @@ function lazychat_init() {
     new LazyChat_Webhook_Sender();
     new LazyChat_Ajax_Handlers();
     new LazyChat_REST_API();
+    
+    // Check for plugin updates
+    lazychat_check_plugin_update();
 }
 add_action('plugins_loaded', 'lazychat_init');
 
