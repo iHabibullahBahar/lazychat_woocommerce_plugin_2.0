@@ -21,7 +21,6 @@ class LazyChat_Ajax_Handlers {
     
     public function __construct() {
         add_action('wp_ajax_lazychat_test_connection', array($this, 'test_connection'));
-        add_action('wp_ajax_lazychat_test_webhook', array($this, 'test_webhook'));
         add_action('wp_ajax_lazychat_check_connection', array($this, 'check_connection'));
         add_action('wp_ajax_lazychat_toggle_plugin', array($this, 'toggle_plugin'));
         add_action('wp_ajax_lazychat_login', array($this, 'login'));
@@ -32,7 +31,6 @@ class LazyChat_Ajax_Handlers {
         add_action('wp_ajax_lazychat_sync_products', array($this, 'sync_products'));
         add_action('wp_ajax_lazychat_sync_progress', array($this, 'sync_progress'));
         add_action('wp_ajax_lazychat_contact', array($this, 'contact'));
-        add_action('wp_ajax_lazychat_cleanup_old_logs', array($this, 'cleanup_old_logs_ajax'));
         add_action('wp_ajax_lazychat_fix_rest_api', array($this, 'fix_rest_api'));
         add_action('wp_ajax_lazychat_test_rest_api', array($this, 'test_rest_api'));
     }
@@ -42,7 +40,7 @@ class LazyChat_Ajax_Handlers {
      */
     public function logout() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
             $this->log_error('Logout failed: Security check failed (nonce verification)', array('action' => 'logout'), 'logout.error');
             wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
             return;
@@ -74,7 +72,7 @@ class LazyChat_Ajax_Handlers {
      */
     public function disconnect() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
             $this->log_error('Disconnect failed: Security check failed (nonce verification)', array('action' => 'disconnect'), 'disconnect.error');
             wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
             return;
@@ -164,7 +162,7 @@ class LazyChat_Ajax_Handlers {
      */
     public function login() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
             $this->log_error('Login failed: Security check failed (nonce verification)', array('action' => 'login'), 'login.error');
             wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
             return;
@@ -312,7 +310,7 @@ class LazyChat_Ajax_Handlers {
      */
     public function select_shop() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
             $this->log_error('Select shop failed: Security check failed (nonce verification)', array('action' => 'select_shop'), 'select_shop.error');
             wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
             return;
@@ -369,7 +367,7 @@ class LazyChat_Ajax_Handlers {
      */
     public function test_connection() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
             wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
             return;
         }
@@ -453,261 +451,11 @@ class LazyChat_Ajax_Handlers {
     }
     
     /**
-     * Test webhook functionality
-     */
-    public function test_webhook() {
-        // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
-            wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
-            return;
-        }
-        
-        // Check user capabilities
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(array('message' => __('Insufficient permissions.', 'lazychat')));
-            return;
-        }
-        
-        $api_url = 'https://app.lazychat.io/api/woocommerce-plugin';
-        $bearer_token = isset($_POST['bearer_token']) ? sanitize_text_field($_POST['bearer_token']) : '';
-        $webhook_type = isset($_POST['webhook_type']) ? sanitize_text_field($_POST['webhook_type']) : '';
-        
-        if (empty($bearer_token) || empty($webhook_type)) {
-            wp_send_json_error(array('message' => __('Bearer Token and Webhook Type are required.', 'lazychat')));
-            return;
-        }
-        
-        // Generate test data based on webhook type
-        $test_data = $this->generate_test_data($webhook_type);
-        
-        // Determine endpoint - only support product
-        if ($webhook_type !== 'product') {
-            wp_send_json_error(array(
-                'message' => __('Only product webhooks are supported', 'lazychat')
-            ));
-            return;
-        }
-        
-        $endpoint = '/products/create';
-        $test_url = rtrim($api_url, '/') . $endpoint;
-        
-        // Prepare payload
-        $payload = json_encode($test_data);
-        
-        $headers = array(
-            'Authorization' => 'Bearer ' . $bearer_token,
-            'Content-Type' => 'application/json',
-            'X-Webhook-Timestamp' => time(),
-            'X-Webhook-Event' => $webhook_type . '_test'
-        );
-        
-        $args = array(
-            'headers' => $headers,
-            'body' => $payload,
-            'timeout' => 15,
-            'method' => 'POST'
-        );
-        
-        $response = wp_remote_request($test_url, $args);
-        
-        if (is_wp_error($response)) {
-            wp_send_json_error(array(
-                'message' => sprintf(
-                    /* translators: %s: error message */
-                    __('Webhook test failed: %s', 'lazychat'),
-                    $response->get_error_message()
-                )
-            ));
-            return;
-        }
-        
-        $response_code = wp_remote_retrieve_response_code($response);
-        $response_body = wp_remote_retrieve_body($response);
-        
-        if ($response_code === 200) {
-            $data = json_decode($response_body, true);
-            if (isset($data['status']) && $data['status']) {
-                wp_send_json_success(array(
-                    'message' => sprintf(
-                        /* translators: 1: webhook type (product/order), 2: API URL, 3: response message */
-                        __('✅ %1$s webhook test successful!<br><strong>URL:</strong> %2$s<br><strong>Response:</strong> %3$s', 'lazychat'),
-                        ucfirst($webhook_type),
-                        esc_html($test_url),
-                        isset($data['message']) ? esc_html($data['message']) : 'API accepted the webhook'
-                    )
-                ));
-            } else {
-                wp_send_json_error(array(
-                    'message' => sprintf(
-                        /* translators: 1: API URL, 2: error message */
-                        __('❌ Webhook responded with error<br><strong>URL:</strong> %1$s<br><strong>Error:</strong> %2$s', 'lazychat'),
-                        esc_html($test_url),
-                        isset($data['message']) ? esc_html($data['message']) : __('Unknown error', 'lazychat')
-                    )
-                ));
-            }
-        } else {
-            wp_send_json_error(array(
-                'message' => sprintf(
-                    /* translators: 1: API URL, 2: HTTP status code, 3: response body */
-                    __('❌ Webhook test failed<br><strong>URL:</strong> %1$s<br><strong>HTTP Code:</strong> %2$d<br><strong>Response:</strong> %3$s', 'lazychat'),
-                    esc_html($test_url),
-                    $response_code,
-                    esc_html($response_body)
-                )
-            ));
-        }
-    }
-    
-    /**
-     * Generate test data for webhook testing (WooCommerce REST API v2 format)
-     */
-    private function generate_test_data($type) {
-        if ($type === 'product') {
-            $test_id = 'test_' . time();
-            $current_time = current_time('Y-m-d\TH:i:s');
-            $current_time_gmt = gmdate('Y-m-d\TH:i:s');
-            
-            return array(
-                'id' => $test_id,
-                'name' => 'Test Product - LazyChat Integration',
-                'slug' => 'test-product-' . time(),
-                'permalink' => home_url('/product/test-product-' . time()),
-                'date_created' => $current_time,
-                'date_created_gmt' => $current_time_gmt,
-                'date_modified' => $current_time,
-                'date_modified_gmt' => $current_time_gmt,
-                'type' => 'simple',
-                'status' => 'publish',
-                'featured' => false,
-                'catalog_visibility' => 'visible',
-                'description' => 'This is a test product for webhook testing. It contains sample data to verify the webhook integration with LazyChat.',
-                'short_description' => 'Test product for LazyChat webhook testing',
-                'sku' => 'TEST-' . time(),
-                'price' => '29.99',
-                'regular_price' => '29.99',
-                'sale_price' => null,
-                'date_on_sale_from' => null,
-                'date_on_sale_from_gmt' => null,
-                'date_on_sale_to' => null,
-                'date_on_sale_to_gmt' => null,
-                'on_sale' => false,
-                'purchasable' => true,
-                'total_sales' => 0,
-                'virtual' => false,
-                'downloadable' => false,
-                'downloads' => array(),
-                'download_limit' => -1,
-                'download_expiry' => -1,
-                'external_url' => null,
-                'button_text' => null,
-                'tax_status' => 'taxable',
-                'tax_class' => null,
-                'manage_stock' => true,
-                'stock_quantity' => 100,
-                'in_stock' => true,
-                'backorders' => 'no',
-                'backorders_allowed' => false,
-                'backordered' => false,
-                'sold_individually' => false,
-                'weight' => '1.5',
-                'dimensions' => array(
-                    'length' => '10',
-                    'width' => '8',
-                    'height' => '5'
-                ),
-                'shipping_required' => true,
-                'shipping_taxable' => true,
-                'shipping_class' => null,
-                'shipping_class_id' => 0,
-                'reviews_allowed' => true,
-                'average_rating' => '0.00',
-                'rating_count' => 0,
-                'upsell_ids' => array(),
-                'cross_sell_ids' => array(),
-                'parent_id' => 0,
-                'purchase_note' => null,
-                'categories' => array(
-                    array(
-                        'id' => 1,
-                        'name' => 'Test Category',
-                        'slug' => 'test-category'
-                    )
-                ),
-                'tags' => array(
-                    array(
-                        'id' => 1,
-                        'name' => 'test',
-                        'slug' => 'test'
-                    ),
-                    array(
-                        'id' => 2,
-                        'name' => 'webhook',
-                        'slug' => 'webhook'
-                    ),
-                    array(
-                        'id' => 3,
-                        'name' => 'sample',
-                        'slug' => 'sample'
-                    )
-                ),
-                'images' => array(
-                    array(
-                        'id' => 999,
-                        'date_created' => $current_time,
-                        'date_created_gmt' => $current_time_gmt,
-                        'date_modified' => $current_time,
-                        'date_modified_gmt' => $current_time_gmt,
-                        'src' => 'https://via.placeholder.com/800x800.png?text=Test+Product',
-                        'name' => 'test-product-image.png',
-                        'alt' => 'Test Product Image',
-                        'position' => 0
-                    )
-                ),
-                'attributes' => array(
-                    array(
-                        'id' => 1,
-                        'name' => 'Color',
-                        'slug' => 'pa_color',
-                        'position' => 0,
-                        'visible' => true,
-                        'variation' => false,
-                        'options' => array('Blue', 'Red', 'Green')
-                    )
-                ),
-                'default_attributes' => array(),
-                'variations' => array(),
-                'grouped_products' => array(),
-                'menu_order' => 0,
-                'price_html' => '<span class="woocommerce-Price-amount amount">29.99' . get_woocommerce_currency_symbol() . '</span>',
-                'related_ids' => array(),
-                'meta_data' => array(
-                    array(
-                        'id' => 1,
-                        'key' => '_test_mode',
-                        'value' => 'yes'
-                    ),
-                    array(
-                        'id' => 2,
-                        'key' => '_test_timestamp',
-                        'value' => time()
-                    )
-                ),
-                'stock_status' => 'instock',
-                'brands' => array()
-            );
-        } else {
-            // Order webhooks are not supported
-            return array();
-        }
-    }
-    
-    /**
      * Check connection status from LazyChat dashboard
      */
     public function check_connection() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
             wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
             return;
         }
@@ -825,7 +573,7 @@ class LazyChat_Ajax_Handlers {
      */
     public function toggle_plugin() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
             wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
             return;
         }
@@ -909,7 +657,7 @@ class LazyChat_Ajax_Handlers {
      */
     public function generate_wc_api_keys() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
             wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
             return;
         }
@@ -1015,7 +763,7 @@ class LazyChat_Ajax_Handlers {
      */
     public function sync_products() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
             $this->log_error('Sync products failed: Security check failed (nonce verification)', array('action' => 'sync_products'), 'sync_products.error');
             wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
             return;
@@ -1156,7 +904,7 @@ class LazyChat_Ajax_Handlers {
      */
     public function sync_progress() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
             $this->log_error('Sync progress failed: Security check failed (nonce verification)', array('action' => 'sync_progress'), 'sync_progress.error');
             wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
             return;
@@ -1403,7 +1151,7 @@ class LazyChat_Ajax_Handlers {
      */
     public function contact() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
             $this->log_error('Contact API failed: Security check failed (nonce verification)', array('action' => 'contact'), 'contact.error');
             wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
             return;
@@ -1474,7 +1222,7 @@ class LazyChat_Ajax_Handlers {
      */
     public function test_rest_api() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
             wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
             return;
         }
@@ -1573,7 +1321,7 @@ class LazyChat_Ajax_Handlers {
      */
     public function fix_rest_api() {
         // Verify nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'lazychat_nonce')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
             wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
             return;
         }
