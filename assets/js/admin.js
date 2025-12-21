@@ -912,9 +912,6 @@ jQuery(document).ready(function($) {
         const totalPages = data.total_pages || 1;
         const progress = Math.round(data.progress || 0);
         const statusText = data.sync_status || 'IN_PROGRESS';
-        const errors = data.errors || [];
-        const failedProducts = data.failed_products || [];
-        const startedAt = data.started_at || null;
         const estimatedTimeRemaining = data.estimated_time_remaining_seconds || null;
 
         let html = '<div class="lazychat-sync-progress">';
@@ -930,29 +927,14 @@ jQuery(document).ready(function($) {
         html += '<div class="lazychat-progress-stats" style="margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; font-size: 13px;">';
         html += '<div><strong>Total Products:</strong> ' + totalProducts + '</div>';
         html += '<div><strong>Page:</strong> ' + currentPage + ' / ' + totalPages + '</div>';
-        if (failedProducts.length > 0) {
-            html += '<div style="color: #dc3545;"><strong>Failed:</strong> ' + failedProducts.length + '</div>';
-        }
         if (estimatedTimeRemaining) {
             html += '<div><strong>ETA:</strong> ' + Math.ceil(estimatedTimeRemaining / 60) + ' min</div>';
         }
         html += '</div>';
 
-        if (errors.length > 0) {
-            html += '<div class="lazychat-progress-message" style="margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 12px; color: #856404;">';
-            html += '<strong>Errors:</strong><br>';
-            errors.slice(0, 5).forEach(function(error) {
-                html += '• ' + escapeHtml(error) + '<br>';
-            });
-            if (errors.length > 5) {
-                html += '• ... and ' + (errors.length - 5) + ' more';
-            }
-            html += '</div>';
-        }
-
-        if (startedAt) {
+        if (data.started_at) {
             html += '<div style="margin-top: 10px; font-size: 12px; color: #999;">';
-            html += '<strong>Started at:</strong> ' + escapeHtml(startedAt);
+            html += '<strong>Started at:</strong> ' + escapeHtml(data.started_at);
             html += '</div>';
         }
 

@@ -100,33 +100,79 @@ class LazyChat_Admin {
     }
     
     /**
-     * Check connection to LazyChat once per settings page visit
-     * Sends connection check event notification
+     * Check connection to LazyChat on every settings page visit
+     * Sends connection check event notification and logout if fails
      */
     private function check_connection_on_page_load() {
-        // Check if already sent this visit
-        $transient_key = 'lazychat_connection_checked_' . get_current_user_id();
-        if (get_transient($transient_key)) {
-            return;
-        }
-        
         // Get bearer token
         $bearer_token = get_option('lazychat_bearer_token', '');
         if (empty($bearer_token)) {
             return; // Not logged in, no need to check
         }
         
-        // Send connection check event
-        if (function_exists('lazychat_send_event_notification')) {
-            lazychat_send_event_notification('settings.checking_connection', array(
+        // Send connection check event with blocking request to check response
+        $api_url = 'https://app.lazychat.io/api/woocommerce-plugin/events';
+        $shop_id = get_option('lazychat_selected_shop_id', '');
+        
+        $payload = array(
+            'event_type' => 'settings.checking_connection',
+            'event_data' => array(
                 'user_id' => get_current_user_id(),
                 'user_email' => wp_get_current_user()->user_email,
                 'check_time' => current_time('mysql')
-            ));
+            ),
+            'site_info' => array(
+                'site_url' => get_site_url(),
+                'site_name' => get_bloginfo('name'),
+                'wordpress_version' => get_bloginfo('version'),
+                'woocommerce_version' => defined('WC_VERSION') ? WC_VERSION : 'N/A',
+                'plugin_version' => LAZYCHAT_VERSION,
+                'php_version' => phpversion(),
+                'timestamp' => current_time('mysql')
+            )
+        );
+        
+        $response = wp_remote_post($api_url, array(
+            'body' => wp_json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $bearer_token,
+                'Content-Type' => 'application/json',
+                'X-Event-Type' => 'settings.checking_connection',
+                'X-Plugin-Version' => LAZYCHAT_VERSION,
+                'X-Lazychat-Shop-Id' => $shop_id,
+                'X-Event-Timestamp' => time()
+            ),
+            'timeout' => 10,
+            'blocking' => true, // Blocking to check response
+            'data_format' => 'body'
+        ));
+        
+        // Check if connection was successful
+        if (!is_wp_error($response)) {
+            $response_code = wp_remote_retrieve_response_code($response);
+            
+            if ($response_code === 200) {
+                // Connection successful
+                return;
+            }
         }
         
-        // Set transient for 5 minutes (won't send again until user leaves and comes back)
-        set_transient($transient_key, true, 300);
+        // Connection failed - logout user
+        $this->force_logout();
+    }
+    
+    /**
+     * Force logout by clearing LazyChat credentials
+     */
+    private function force_logout() {
+        delete_option('lazychat_bearer_token');
+        delete_option('lazychat_selected_shop_id');
+        delete_option('lazychat_selected_shop_name');
+        delete_option('lazychat_plugin_active');
+        
+        // Redirect to settings page to show login form
+        wp_safe_redirect(admin_url('options-general.php?page=lazychat_settings&connection_failed=1'));
+        exit;
     }
     
     /**
@@ -140,6 +186,14 @@ class LazyChat_Admin {
 
         $bearer_token = get_option('lazychat_bearer_token', '');
         $needs_login  = empty($bearer_token);
+        
+        // Show connection failed notice only if not logged in
+        if ($needs_login && isset($_GET['connection_failed']) && $_GET['connection_failed'] === '1') {
+            echo '<div class="notice notice-error is-dismissible">';
+            echo '<p><strong>' . esc_html__('Connection Failed', 'lazychat') . '</strong></p>';
+            echo '<p>' . esc_html__('Unable to connect to LazyChat. You have been logged out. Please login again.', 'lazychat') . '</p>';
+            echo '</div>';
+        }
         ?>
         <div class="wrap">
             <h2 class="heading"><?php esc_html_e('LazyChat', 'lazychat'); ?></h2>
