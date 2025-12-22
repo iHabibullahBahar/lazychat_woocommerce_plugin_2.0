@@ -505,7 +505,6 @@ class LazyChat_Admin {
                             <!-- Action Buttons -->
                             <div class="lazychat-actions-card">
                                 <div class="lazychat-actions-group">
-                                    <?php submit_button(__('Save Changes', 'lazychat'), 'primary large', 'submit', false, array('class' => 'lazychat-action-btn')); ?>
                                     <button type="button" id="lazychat_logout" class="button button-secondary large lazychat-action-btn">
                                         <span class="dashicons dashicons-exit"></span>
                                         <?php esc_html_e('Logout', 'lazychat'); ?>

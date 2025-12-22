@@ -434,20 +434,13 @@ jQuery(document).ready(function($) {
             notifyPluginToggle($toggle, false, function(success) {
                 if (success) {
                     $toggle.prop('checked', false);
-                    $results.html('<div class="notice notice-success"><p>✅ Plugin deactivated. Saving changes...</p></div>');
-                    
-                    // Submit the form to save the deactivation
-                    setTimeout(function() {
-                        $toggle.closest('form').find('input[type="submit"]').click();
-                    }, 1000);
+                    updatePluginStatusUI(false);
+                    $results.html('<div class="notice notice-success"><p>✅ Plugin deactivated successfully!</p></div>');
                 } else {
                     // Still allow deactivation even if notification failed
                     $toggle.prop('checked', false);
-                    $results.html('<div class="notice notice-warning"><p>⚠️ Plugin deactivated (notification to LazyChat server failed, but deactivation will proceed). Saving changes...</p></div>');
-                    
-                    setTimeout(function() {
-                        $toggle.closest('form').find('input[type="submit"]').click();
-                    }, 1500);
+                    updatePluginStatusUI(false);
+                    $results.html('<div class="notice notice-warning"><p>⚠️ Plugin deactivated (notification to LazyChat server failed, but deactivation will proceed).</p></div>');
                 }
             });
             
@@ -487,12 +480,8 @@ jQuery(document).ready(function($) {
                     notifyPluginToggle($toggle, true, function(success) {
                         if (success) {
                             $toggle.prop('checked', true);
-                            $results.html('<div class="notice notice-success"><p>✅ Plugin activated successfully! Saving changes...</p></div>');
-                            
-                            // Submit the form to save the activation
-                            setTimeout(function() {
-                                $toggle.closest('form').find('input[type="submit"]').click();
-                            }, 1000);
+                            updatePluginStatusUI(true);
+                            $results.html('<div class="notice notice-success"><p>✅ Plugin activated successfully!</p></div>');
                         } else {
                             $toggle.prop('checked', false);
                             $results.html('<div class="notice notice-error"><p>❌ Failed to notify LazyChat server. Plugin not activated.</p></div>');
@@ -575,6 +564,28 @@ jQuery(document).ready(function($) {
                 callback(false);
             }
         });
+    }
+    
+    /**
+     * Update plugin status UI elements
+     */
+    function updatePluginStatusUI(isActive) {
+        const $statusCard = $('.lazychat-status-card');
+        const $statusBadge = $('.lazychat-status-badge');
+        const $statusDescription = $('.lazychat-status-description');
+        const $headerIcon = $('.lazychat-status-card .lazychat-card-title .dashicons');
+        
+        if (isActive) {
+            $statusCard.addClass('is-active');
+            $statusBadge.removeClass('status-inactive').addClass('status-active').text('Active');
+            $statusDescription.text('Webhooks are being sent to LazyChat');
+            $headerIcon.removeClass('dashicons-dismiss').addClass('dashicons-yes-alt');
+        } else {
+            $statusCard.removeClass('is-active');
+            $statusBadge.removeClass('status-active').addClass('status-inactive').text('Inactive');
+            $statusDescription.text('No webhooks will be sent');
+            $headerIcon.removeClass('dashicons-yes-alt').addClass('dashicons-dismiss');
+        }
     }
     
     /**

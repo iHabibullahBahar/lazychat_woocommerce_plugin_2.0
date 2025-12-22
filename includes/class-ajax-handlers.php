@@ -637,6 +637,9 @@ class LazyChat_Ajax_Handlers {
         error_log('[LazyChat] Toggle Plugin Response: Code=' . $response_code . ', Body=' . $response_body);
         
         if ($response_code === 200 && isset($data['status']) && $data['status'] === 'success') {
+            // Save the plugin active status to database
+            update_option('lazychat_plugin_active', $enabled ? 'Yes' : 'No');
+            
             wp_send_json_success(array(
                 'message' => isset($data['message']) ? $data['message'] : __('Plugin status updated successfully.', 'lazychat'),
                 'enabled' => isset($data['enabled']) ? $data['enabled'] : $enabled
