@@ -33,6 +33,7 @@ class LazyChat_Ajax_Handlers {
         add_action('wp_ajax_lazychat_contact', array($this, 'contact'));
         add_action('wp_ajax_lazychat_fix_rest_api', array($this, 'fix_rest_api'));
         add_action('wp_ajax_lazychat_test_rest_api', array($this, 'test_rest_api'));
+        add_action('wp_ajax_lazychat_save_webhook_setting', array($this, 'save_webhook_setting'));
     }
     
     /**
@@ -1396,6 +1397,34 @@ class LazyChat_Ajax_Handlers {
                 __('Check if any security plugins are blocking REST API access', 'lazychat'),
                 __('Ensure your server supports URL rewriting (.htaccess for Apache, nginx.conf for Nginx)', 'lazychat')
             )
+        ));
+    }
+    
+    /**
+     * Save webhook setting (auto-save on toggle)
+     */
+    public function save_webhook_setting() {
+        // Verify nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_nonce')) {
+            wp_send_json_error(array('message' => __('Security check failed.', 'lazychat')));
+            return;
+        }
+
+        // Check user capabilities
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => __('Insufficient permissions.', 'lazychat')));
+            return;
+        }
+
+        // Get and validate the setting
+        $enable_products = isset($_POST['enable_products']) ? sanitize_text_field(wp_unslash($_POST['enable_products'])) : 'No';
+        
+        // Update the option
+        update_option('lazychat_enable_products', $enable_products);
+
+        wp_send_json_success(array(
+            'message' => __('Webhook setting saved successfully.', 'lazychat'),
+            'enable_products' => $enable_products
         ));
     }
 }

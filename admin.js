@@ -431,7 +431,7 @@ jQuery(document).ready(function($) {
             $results.html('<div class="notice notice-info"><p>⏳ Deactivating plugin...</p></div>');
             
             // Notify LazyChat server about deactivation
-            notifyPluginToggle($toggle, false, function(success) {
+            notifyPluginToggle(false, function(success) {
                 if (success) {
                     $toggle.prop('checked', false);
                     $results.html('<div class="notice notice-success"><p>✅ Plugin deactivated. Saving changes...</p></div>');
@@ -484,7 +484,7 @@ jQuery(document).ready(function($) {
                     // Connection verified - notify LazyChat server about activation
                     $results.html('<div class="notice notice-info"><p>⏳ Connection verified! Activating plugin...</p></div>');
                     
-                    notifyPluginToggle($toggle, true, function(success) {
+                    notifyPluginToggle(true, function(success) {
                         if (success) {
                             $toggle.prop('checked', true);
                             $results.html('<div class="notice notice-success"><p>✅ Plugin activated successfully! Saving changes...</p></div>');
@@ -530,18 +530,7 @@ jQuery(document).ready(function($) {
     /**
      * Notify LazyChat server about plugin toggle
      */
-    function notifyPluginToggle($toggle, enabled, callback) {
-        const $toggleContainer = $toggle.closest('.lazychat-toggle-field');
-        
-        // Add saving indicator
-        let $indicator = $toggleContainer.find('.lazychat-saving-indicator');
-        if (!$indicator.length) {
-            $indicator = $('<span class="lazychat-saving-indicator" style="position: absolute; right: 70px; font-size: 12px; color: #999;">Saving...</span>');
-            $toggleContainer.css('position', 'relative');
-            $toggleContainer.append($indicator);
-        }
-        $indicator.show();
-        
+    function notifyPluginToggle(enabled, callback) {
         $.ajax({
             url: lazychat_ajax.ajax_url,
             type: 'POST',
@@ -552,25 +541,13 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.success) {
-                    $indicator.text('✓ Saved').css('color', '#46b450');
-                    setTimeout(function() {
-                        $indicator.fadeOut();
-                    }, 2000);
                     callback(true);
                 } else {
-                    $indicator.text('✗ Failed').css('color', '#dc3232');
-                    setTimeout(function() {
-                        $indicator.fadeOut();
-                    }, 3000);
                     console.error('Toggle Plugin Failed:', response.data.message);
                     callback(false);
                 }
             },
             error: function(xhr, status, error) {
-                $indicator.text('✗ Error').css('color', '#dc3232');
-                setTimeout(function() {
-                    $indicator.fadeOut();
-                }, 3000);
                 console.error('Toggle Plugin Error:', {xhr: xhr, status: status, error: error});
                 callback(false);
             }
@@ -680,9 +657,8 @@ jQuery(document).ready(function($) {
         // Add saving indicator
         let $indicator = $toggleContainer.find('.lazychat-saving-indicator');
         if (!$indicator.length) {
-            $indicator = $('<span class="lazychat-saving-indicator" style="position: absolute; right: 70px; font-size: 12px; color: #999;">Saving...</span>');
-            $toggleContainer.css('position', 'relative');
-            $toggleContainer.append($indicator);
+            $indicator = $('<span class="lazychat-saving-indicator" style="display: inline-block; margin-right: 10px; font-size: 12px; color: #999; vertical-align: middle;">Saving...</span>');
+            $toggle.before($indicator);
         }
         $indicator.show();
         
