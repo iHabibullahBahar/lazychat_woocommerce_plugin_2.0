@@ -1,12 +1,18 @@
 jQuery(document).ready(function($) {
     'use strict';
     
+    // Sync cooldown configuration
+    const SYNC_COOLDOWN_MINUTES = 10;
+    const SYNC_COOLDOWN_DURATION = SYNC_COOLDOWN_MINUTES * 60 * 1000; // milliseconds
+    let cooldownInterval = null;
+    
     // Initialize event listeners
     initEventListeners();
     
     // Check sync progress on page load
     if ($('#lazychat_sync_status').length) {
         checkSyncProgressOnLoad();
+        checkSyncCooldown();
     }
     
     /**
@@ -647,6 +653,20 @@ jQuery(document).ready(function($) {
         if (!$button.data('original-text')) {
             $button.data('original-text', originalText);
         }
+        
+        // Check if cooldown is active
+        const lastSyncCompletion = localStorage.getItem('lazychat_last_sync_completion');
+        if (lastSyncCompletion) {
+            const completionTime = parseInt(lastSyncCompletion, 10);
+            const currentTime = new Date().getTime();
+            const timeSinceCompletion = currentTime - completionTime;
+            
+            if (timeSinceCompletion < SYNC_COOLDOWN_DURATION) {
+                const minutesRemaining = Math.ceil((SYNC_COOLDOWN_DURATION - timeSinceCompletion) / 60000);
+                $status.html('<div class="notice notice-warning"><p>⏳ Please wait ' + minutesRemaining + ' minute(s) before syncing again.</p></div>');
+                return;
+            }
+        }
 
         const bearerToken = $('#lazychat_bearer_token').val();
         const shopId = lazychat_ajax.shop_id;
@@ -826,7 +846,13 @@ jQuery(document).ready(function($) {
             // Sync completed - stop polling immediately and show completion data
             stopSyncProgressPolling();
             displaySyncComplete(data);
-            $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
+            
+            // Store completion timestamp for cooldown
+            const completionTime = new Date().getTime();
+            localStorage.setItem('lazychat_last_sync_completion', completionTime);
+            
+            // Enable cooldown
+            enableSyncCooldown(completionTime);
         } else {
             // Unknown state
             stopSyncProgressPolling();
@@ -868,7 +894,31 @@ jQuery(document).ready(function($) {
                     } else if (!data.is_syncing && data.sync_status === 'COMPLETED') {
                         // Show last completed sync info
                         displayLastSyncInfo(data);
-                        $('#lazychat_sync_products').show();
+                        
+                        // Check if sync was completed within cooldown period
+                        if (data.last_sync_at) {
+                            const completionTimestamp = parseCompletionTimestamp(data.last_sync_at);
+                            
+                            if (completionTimestamp) {
+                                const currentTime = new Date().getTime();
+                                const timeSinceCompletion = currentTime - completionTimestamp;
+                                
+                                if (timeSinceCompletion < SYNC_COOLDOWN_DURATION) {
+                                    // Still within cooldown period - store and enable cooldown
+                                    localStorage.setItem('lazychat_last_sync_completion', completionTimestamp);
+                                    enableSyncCooldown(completionTimestamp);
+                                } else {
+                                    // Cooldown expired - show button normally
+                                    $('#lazychat_sync_products').show();
+                                }
+                            } else {
+                                // Couldn't parse timestamp - show button normally
+                                $('#lazychat_sync_products').show();
+                            }
+                        } else {
+                            // No timestamp - show button normally
+                            $('#lazychat_sync_products').show();
+                        }
                     }
                 }
             },
@@ -962,6 +1012,114 @@ jQuery(document).ready(function($) {
 
         html += '</div>';
         $status.html(html);
+    }
+
+    /**
+     * Check if sync cooldown is active on page load
+     */
+    function checkSyncCooldown() {
+        const lastSyncCompletion = localStorage.getItem('lazychat_last_sync_completion');
+        
+        if (!lastSyncCompletion) {
+            return;
+        }
+        
+        const completionTime = parseInt(lastSyncCompletion, 10);
+        const currentTime = new Date().getTime();
+        const timeSinceCompletion = currentTime - completionTime;
+        
+        if (timeSinceCompletion < SYNC_COOLDOWN_DURATION) {
+            // Still in cooldown period
+            enableSyncCooldown(completionTime);
+        } else {
+            // Cooldown expired, clear storage
+            localStorage.removeItem('lazychat_last_sync_completion');
+        }
+    }
+
+    /**
+     * Parse completion timestamp from server format (YYYY-MM-DD HH:MM:SS)
+     * Returns timestamp in milliseconds or null if parsing fails
+     */
+    function parseCompletionTimestamp(dateString) {
+        if (!dateString) {
+            return null;
+        }
+        
+        try {
+            // Format: "2025-12-22 05:59:01"
+            // Parse as local time (WordPress format)
+            const parts = dateString.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
+            
+            if (!parts) {
+                console.error('Failed to parse date format:', dateString);
+                return null;
+            }
+            
+            const [, year, month, day, hours, minutes, seconds] = parts;
+            const timestamp = new Date(
+                parseInt(year, 10),
+                parseInt(month, 10) - 1, // Month is 0-indexed
+                parseInt(day, 10),
+                parseInt(hours, 10),
+                parseInt(minutes, 10),
+                parseInt(seconds, 10)
+            ).getTime();
+            
+            // Verify it's a valid timestamp
+            if (isNaN(timestamp)) {
+                console.error('Invalid timestamp result for:', dateString);
+                return null;
+            }
+            
+            return timestamp;
+        } catch (e) {
+            console.error('Failed to parse completion timestamp:', e);
+            return null;
+        }
+    }
+
+    /**
+     * Enable sync cooldown with countdown timer
+     */
+    function enableSyncCooldown(completionTime) {
+        const $button = $('#lazychat_sync_products');
+        
+        // Clear any existing cooldown interval
+        if (cooldownInterval) {
+            clearInterval(cooldownInterval);
+        }
+        
+        function updateCooldownButton() {
+            const currentTime = new Date().getTime();
+            const timeSinceCompletion = currentTime - completionTime;
+            const timeRemaining = SYNC_COOLDOWN_DURATION - timeSinceCompletion;
+            
+            if (timeRemaining <= 0) {
+                // Cooldown expired
+                clearInterval(cooldownInterval);
+                cooldownInterval = null;
+                localStorage.removeItem('lazychat_last_sync_completion');
+                $button.prop('disabled', false).html($button.data('original-text') || 'Sync Products').show();
+                return;
+            }
+            
+            // Calculate minutes and seconds remaining
+            const minutesRemaining = Math.floor(timeRemaining / 60000);
+            const secondsRemaining = Math.floor((timeRemaining % 60000) / 1000);
+            
+            // Format as MM:SS
+            const formattedTime = minutesRemaining + ':' + (secondsRemaining < 10 ? '0' : '') + secondsRemaining;
+            
+            // Update button text with countdown
+            $button.prop('disabled', true).html('Sync available in ' + formattedTime).show();
+        }
+        
+        // Update immediately
+        updateCooldownButton();
+        
+        // Update every second
+        cooldownInterval = setInterval(updateCooldownButton, 1000);
     }
 
     /**

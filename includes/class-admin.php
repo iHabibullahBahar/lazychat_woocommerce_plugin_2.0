@@ -460,7 +460,8 @@ class LazyChat_Admin {
                                             <p class="lazychat-card-description">
                                                 <?php esc_html_e('Synchronize your WooCommerce products with LazyChat to keep them up to date.', 'lazychat'); ?>
                                             </p>
-                                            <button type="button" id="lazychat_sync_products" class="lazychat-sync-button">
+                                            <button type="button" id="lazychat_sync_products" class="lazychat-sync-button" 
+                                                title="⚠️ Important: Only sync if products are not fetching correctly. Syncing can temporarily affect customer conversion during the process. If you need assistance, please contact LazyChat support.">
                                                 <span class="dashicons dashicons-update"></span>
                                                 <span><?php esc_html_e('Sync Products', 'lazychat'); ?></span>
                                             </button>
