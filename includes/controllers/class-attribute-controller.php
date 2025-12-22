@@ -21,6 +21,10 @@ class LazyChat_Attribute_Controller {
         $page = isset($args['page']) ? absint($args['page']) : 1;
         $per_page = isset($args['per_page']) ? absint($args['per_page']) : 10;
         
+        // Ensure page and per_page are valid
+        $page = max(1, $page);
+        $per_page = max(1, min(1000, $per_page)); // Min 1, Max 1000
+        
         // Calculate offset
         $offset = ($page - 1) * $per_page;
         

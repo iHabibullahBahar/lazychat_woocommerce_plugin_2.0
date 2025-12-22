@@ -32,7 +32,7 @@ class LazyChat_REST_API {
             error_log('[LazyChat] Registering REST API routes for namespace: ' . $this->namespace);
         }
         
-        // Products endpoint with pagination
+        // Products endpoint with pagination or by IDs
         register_rest_route($this->namespace, '/products', array(
             'methods' => 'POST',
             'callback' => array($this, 'get_products'),
@@ -49,7 +49,7 @@ class LazyChat_REST_API {
                     'default' => 10,
                     'sanitize_callback' => 'absint',
                     'validate_callback' => function($param) {
-                        return is_numeric($param) && $param > 0 && $param <= 100;
+                        return is_numeric($param) && $param > 0 && $param <= 1000;
                     }
                 ),
                 'status' => array(
@@ -67,6 +67,15 @@ class LazyChat_REST_API {
                             return true;
                         }
                         return in_array($param, array('simple', 'variable', 'grouped', 'external'));
+                    }
+                ),
+                'product_ids' => array(
+                    'default' => array(),
+                    'validate_callback' => function($param) {
+                        if (empty($param)) {
+                            return true;
+                        }
+                        return is_array($param);
                     }
                 ),
                 'consumer_key' => array(
@@ -138,7 +147,7 @@ class LazyChat_REST_API {
                     'default' => 10,
                     'sanitize_callback' => 'absint',
                     'validate_callback' => function($param) {
-                        return is_numeric($param) && $param > 0 && $param <= 100;
+                        return is_numeric($param) && $param > 0 && $param <= 1000;
                     }
                 ),
                 'status' => array(
@@ -283,7 +292,7 @@ class LazyChat_REST_API {
                     'default' => 10,
                     'sanitize_callback' => 'absint',
                     'validate_callback' => function($param) {
-                        return is_numeric($param) && $param > 0 && $param <= 100;
+                        return is_numeric($param) && $param > 0 && $param <= 1000;
                     }
                 ),
                 'hide_empty' => array(
@@ -334,7 +343,7 @@ class LazyChat_REST_API {
                     'default' => 10,
                     'sanitize_callback' => 'absint',
                     'validate_callback' => function($param) {
-                        return is_numeric($param) && $param > 0 && $param <= 100;
+                        return is_numeric($param) && $param > 0 && $param <= 1000;
                     }
                 ),
                 'consumer_key' => array(
@@ -547,7 +556,7 @@ class LazyChat_REST_API {
     }
     
     /**
-     * Get products with pagination
+     * Get products with pagination or by specific IDs
      */
     public function get_products($request) {
         $body = $request->get_json_params();
@@ -555,6 +564,7 @@ class LazyChat_REST_API {
             $body = array();
         }
         
+        // Prepare common arguments
         $args = array(
             'page' => isset($body['page']) ? absint($body['page']) : 1,
             'per_page' => isset($body['per_page']) ? absint($body['per_page']) : 10,
@@ -562,8 +572,14 @@ class LazyChat_REST_API {
             'type' => isset($body['type']) ? sanitize_text_field($body['type']) : ''
         );
         
-        // Get products from controller
-        $result = LazyChat_Product_Controller::get_products($args);
+        // Check if product_ids are provided
+        if (isset($body['product_ids']) && is_array($body['product_ids']) && !empty($body['product_ids'])) {
+            // Get products by IDs using controller
+            $result = LazyChat_Product_Controller::get_products_by_ids($body['product_ids'], $args);
+        } else {
+            // Get products with pagination using controller
+            $result = LazyChat_Product_Controller::get_products($args);
+        }
         
         // Add plugin version to response
         if (is_array($result)) {

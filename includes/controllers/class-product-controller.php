@@ -12,6 +12,71 @@ if (!defined('ABSPATH')) {
 class LazyChat_Product_Controller {
     
     /**
+     * Get products by specific IDs with pagination
+     * 
+     * @param array $product_ids Array of product IDs
+     * @param array $args Pagination arguments
+     * @return array Products list with pagination and not_found IDs
+     */
+    public static function get_products_by_ids($product_ids, $args = array()) {
+        // Sanitize product IDs
+        $product_ids = array_map('absint', $product_ids);
+        $product_ids = array_filter($product_ids); // Remove zero values
+        
+        if (empty($product_ids)) {
+            return array(
+                'page' => 1,
+                'per_page' => 10,
+                'current_page' => 1,
+                'total_products' => 0,
+                'total_pages' => 0,
+                'products' => array(),
+                'not_found' => array()
+            );
+        }
+        
+        // Get pagination parameters
+        $page = isset($args['page']) ? absint($args['page']) : 1;
+        $per_page = isset($args['per_page']) ? absint($args['per_page']) : 10;
+        
+        // Ensure page and per_page are valid
+        $page = max(1, $page);
+        $per_page = max(1, min(1000, $per_page)); // Min 1, Max 1000
+        
+        // Calculate total and pagination
+        $total_items = count($product_ids);
+        $total_pages = ceil($total_items / $per_page);
+        $offset = ($page - 1) * $per_page;
+        
+        // Get the slice of product IDs for this page
+        $page_product_ids = array_slice($product_ids, $offset, $per_page);
+        
+        $products = array();
+        $not_found = array();
+        
+        foreach ($page_product_ids as $product_id) {
+            $product = self::get_product($product_id);
+            
+            if (is_wp_error($product)) {
+                $not_found[] = $product_id;
+            } else {
+                $products[] = $product;
+            }
+        }
+        
+        // Return response in exact same format as regular products endpoint
+        return array(
+            'page' => $page,
+            'per_page' => $per_page,
+            'current_page' => $page,
+            'total_products' => $total_items,
+            'total_pages' => $total_pages,
+            'products' => $products,
+            'not_found' => $not_found
+        );
+    }
+    
+    /**
      * Get paginated list of products
      * 
      * @param array $args Query arguments
@@ -22,6 +87,10 @@ class LazyChat_Product_Controller {
         $per_page = isset($args['per_page']) ? absint($args['per_page']) : 10;
         $status = isset($args['status']) ? sanitize_text_field($args['status']) : 'publish';
         $type = isset($args['type']) ? sanitize_text_field($args['type']) : '';
+        
+        // Ensure page and per_page are valid
+        $page = max(1, $page);
+        $per_page = max(1, min(1000, $per_page)); // Min 1, Max 1000
         
         // Build query args
         $query_args = array(

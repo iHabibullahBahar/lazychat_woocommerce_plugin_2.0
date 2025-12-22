@@ -24,6 +24,10 @@ class LazyChat_Category_Controller {
         $orderby = isset($args['orderby']) ? sanitize_text_field($args['orderby']) : 'name';
         $order = isset($args['order']) ? sanitize_text_field($args['order']) : 'ASC';
         
+        // Ensure page and per_page are valid
+        $page = max(1, $page);
+        $per_page = max(1, min(1000, $per_page)); // Min 1, Max 1000
+        
         // Calculate offset
         $offset = ($page - 1) * $per_page;
         
@@ -40,13 +44,13 @@ class LazyChat_Category_Controller {
         // Get categories
         $categories = get_terms($query_args);
         
-        // Get total count
+        // Get total count (using get_terms with 'count' => true for WP 5.6+)
         $total_count_args = array(
             'taxonomy' => 'product_cat',
             'hide_empty' => $hide_empty,
-            'fields' => 'count'
+            'count' => true
         );
-        $total_categories = (int) wp_count_terms($total_count_args);
+        $total_categories = (int) get_terms($total_count_args);
         
         // Prepare categories data
         $categories_data = array();
