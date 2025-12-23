@@ -3,7 +3,7 @@
  * Plugin Name: LazyChat
  * Plugin URI: https://app.lazychat.io
  * Description: Connect your WooCommerce store with LazyChat's AI-powered customer support platform. Automatically sync products and orders via webhooks.
- * Version: 1.4.4
+ * Version: 1.4.5
  * Author: LazyChat
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -24,7 +24,7 @@ if (!defined('ABSPATH')) {
 
 
 // Define plugin constants
-define('LAZYCHAT_VERSION', '1.4.4');
+define('LAZYCHAT_VERSION', '1.4.5');
 define('LAZYCHAT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LAZYCHAT_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LAZYCHAT_PLUGIN_BASENAME', plugin_basename(__FILE__));

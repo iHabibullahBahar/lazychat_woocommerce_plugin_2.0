@@ -975,7 +975,7 @@ jQuery(document).ready(function($) {
                         // Active sync found - start polling and hide button
                         displaySyncProgress(data);
                         startSyncProgressPolling();
-                        $('#lazychat_sync_products').hide();
+                        $('#lazychat_sync_products').prop('disabled', true).hide();
                     } else if (!data.is_syncing && data.sync_status === 'COMPLETED') {
                         // Show last completed sync info
                         displayLastSyncInfo(data);
