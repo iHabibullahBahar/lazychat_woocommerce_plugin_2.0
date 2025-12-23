@@ -924,9 +924,9 @@ jQuery(document).ready(function($) {
         }
 
         if (data.is_syncing && data.sync_status === 'IN_PROGRESS') {
-            // Sync is in progress - hide button and continue polling
+            // Sync is in progress - disable and hide button, continue polling
             displaySyncProgress(data);
-            $button.hide();
+            $button.prop('disabled', true).hide();
         } else if (!data.is_syncing && data.sync_status === 'COMPLETED') {
             // Sync completed - stop polling immediately and show completion data
             stopSyncProgressPolling();
