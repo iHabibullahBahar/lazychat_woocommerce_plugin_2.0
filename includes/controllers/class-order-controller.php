@@ -102,9 +102,10 @@ class LazyChat_Order_Controller {
                 self::set_shipping_address($order, $data['shipping']);
             }
             
-            // Add line items (products)
-            if (isset($data['line_items']) && is_array($data['line_items'])) {
-                self::add_line_items($order, $data['line_items']);
+            // Add line items (products) - store line items data for later processing
+            $line_items_data = isset($data['line_items']) && is_array($data['line_items']) ? $data['line_items'] : array();
+            if (!empty($line_items_data)) {
+                self::add_line_items($order, $line_items_data);
             }
             
             // Add shipping lines
@@ -161,7 +162,12 @@ class LazyChat_Order_Controller {
             // Calculate totals
             $order->calculate_totals();
             
-            // Save the order
+            // Re-apply price fallbacks after calculate_totals() to ensure they stick
+            if (!empty($line_items_data)) {
+                self::apply_price_fallbacks($order, $line_items_data);
+            }
+            
+            // Save the order (this saves both the order and the corrected totals)
             $order_id = $order->save();
             
             if (!$order_id) {
@@ -234,41 +240,8 @@ class LazyChat_Order_Controller {
                 $product = wc_get_product($variation_id > 0 ? $variation_id : $product_id);
                 
                 if ($product) {
-                    // Smart price fallback: handle products with null price
-                    $product_price = $product->get_price();
-                    $price_fallback_used = false;
-                    $fallback_source = '';
-                    $fallback_value = '';
-                    
-                    // If price is null or empty, fall back to sale_price or regular_price
-                    if (empty($product_price) || $product_price === '' || $product_price === null) {
-                        $fallback_price = $product->get_sale_price();
-                        
-                        // If sale price is also empty, use regular price
-                        if (empty($fallback_price) || $fallback_price === '' || $fallback_price === null) {
-                            $fallback_price = $product->get_regular_price();
-                            $fallback_source = 'regular_price';
-                        } else {
-                            $fallback_source = 'sale_price';
-                        }
-                        
-                        // If we have a valid fallback price, set it on the product temporarily
-                        if (!empty($fallback_price) && is_numeric($fallback_price)) {
-                            $product->set_price($fallback_price);
-                            $price_fallback_used = true;
-                            $fallback_value = $fallback_price;
-                        }
-                    }
-                    
+                    // Add product to order
                     $item_id = $order->add_product($product, $quantity);
-                    
-                    // Store hidden metadata if price fallback was used (underscore prefix hides from frontend)
-                    if ($item_id && $price_fallback_used) {
-                        wc_add_order_item_meta($item_id, '_lazychat_price_fallback', 'yes', true);
-                        wc_add_order_item_meta($item_id, '_lazychat_fallback_source', $fallback_source, true);
-                        wc_add_order_item_meta($item_id, '_lazychat_fallback_value', $fallback_value, true);
-                        wc_add_order_item_meta($item_id, '_lazychat_original_price', 'null', true);
-                    }
                     
                     // Add custom meta data if provided
                     if ($item_id && isset($item['meta_data']) && is_array($item['meta_data'])) {
@@ -281,6 +254,83 @@ class LazyChat_Order_Controller {
                 }
             }
         }
+    }
+    
+    /**
+     * Apply price fallbacks to order items after calculate_totals()
+     * This ensures manual prices aren't overridden by WooCommerce calculations
+     */
+    private static function apply_price_fallbacks($order, $line_items_data) {
+        $order_items = $order->get_items();
+        $item_index = 0;
+        
+        foreach ($order_items as $item_id => $order_item) {
+            // Match order item with original line item data by index
+            if (isset($line_items_data[$item_index])) {
+                $product = $order_item->get_product();
+                
+                if ($product) {
+                    $quantity = $order_item->get_quantity();
+                    $product_price = $product->get_price();
+                    
+                    // Check if price fallback is needed
+                    if (empty($product_price) || $product_price === '' || $product_price === null) {
+                        $fallback_price = $product->get_sale_price();
+                        $fallback_source = '';
+                        
+                        // If sale price is also empty, use regular price
+                        if (empty($fallback_price) || $fallback_price === '' || $fallback_price === null) {
+                            $fallback_price = $product->get_regular_price();
+                            $fallback_source = 'regular_price';
+                        } else {
+                            $fallback_source = 'sale_price';
+                        }
+                        
+                        // If we have a valid fallback price, apply it to the order item
+                        if (!empty($fallback_price) && is_numeric($fallback_price)) {
+                            $fallback_price = floatval($fallback_price);
+                            
+                            // Set the price directly on the order item
+                            $order_item->set_subtotal($fallback_price * $quantity);
+                            $order_item->set_total($fallback_price * $quantity);
+                            $order_item->save();
+                            
+                            // Store hidden metadata about price fallback
+                            wc_add_order_item_meta($item_id, '_lazychat_price_fallback', 'yes', true);
+                            wc_add_order_item_meta($item_id, '_lazychat_fallback_source', $fallback_source, true);
+                            wc_add_order_item_meta($item_id, '_lazychat_fallback_value', $fallback_price, true);
+                            wc_add_order_item_meta($item_id, '_lazychat_original_price', 'null', true);
+                        }
+                    }
+                }
+            }
+            $item_index++;
+        }
+        
+        // Manually update order totals without recalculating item prices
+        // Sum up all line item totals
+        $items_total = 0;
+        $items_subtotal = 0;
+        foreach ($order->get_items() as $item) {
+            $items_total += floatval($item->get_total());
+            $items_subtotal += floatval($item->get_subtotal());
+        }
+        
+        // Calculate final order total including all components
+        $total = $items_total;
+        $total += floatval($order->get_shipping_total());
+        $total += floatval($order->get_total_tax());
+        
+        // Add fees
+        foreach ($order->get_fees() as $fee) {
+            $total += floatval($fee->get_total());
+        }
+        
+        // Subtract discounts (coupons)
+        $total -= floatval($order->get_discount_total());
+        
+        // Set the final total
+        $order->set_total(max(0, $total)); // Ensure total is never negative
     }
     
     /**
@@ -351,7 +401,37 @@ class LazyChat_Order_Controller {
      * Prepare order response data
      */
     public static function prepare_order_response($order) {
-        return array(
+        // Get all order meta data
+        $all_order_meta = $order->get_meta_data();
+        $order_meta_data = array();
+        $order_secure_meta = array();
+        
+        foreach ($all_order_meta as $meta_obj) {
+            $meta_key = $meta_obj->key;
+            $meta_value = $meta_obj->value;
+            
+            // Skip internal WooCommerce meta
+            if (in_array($meta_key, array('_order_key', '_cart_hash', '_order_stock_reduced', '_download_permissions_granted', '_recorded_sales', '_recorded_coupon_usage_counts', '_new_order_email_sent'))) {
+                continue;
+            }
+            
+            // Separate secure (underscore prefix) from general meta
+            if (strpos($meta_key, '_') === 0) {
+                // Secure/hidden meta
+                $order_secure_meta[] = array(
+                    'key' => $meta_key,
+                    'value' => $meta_value,
+                );
+            } else {
+                // Public/general meta
+                $order_meta_data[] = array(
+                    'key' => $meta_key,
+                    'value' => $meta_value,
+                );
+            }
+        }
+        
+        $response = array(
             'id' => $order->get_id(),
             'order_number' => $order->get_order_number(),
             'status' => $order->get_status(),
@@ -398,6 +478,16 @@ class LazyChat_Order_Controller {
             'fee_lines' => self::prepare_fee_lines($order),
             'coupon_lines' => self::prepare_coupon_lines($order),
         );
+        
+        // Add order metadata if exists
+        if (!empty($order_meta_data)) {
+            $response['meta_data'] = $order_meta_data;
+        }
+        if (!empty($order_secure_meta)) {
+            $response['secure_meta'] = $order_secure_meta;
+        }
+        
+        return $response;
     }
     
     /**
@@ -442,6 +532,43 @@ class LazyChat_Order_Controller {
                     'value' => wc_get_order_item_meta($item_id, '_lazychat_fallback_value', true),
                     'original_price' => wc_get_order_item_meta($item_id, '_lazychat_original_price', true),
                 );
+            }
+            
+            // Add all item metadata (both secure and general)
+            $all_meta = $item->get_meta_data();
+            $meta_data = array();
+            $secure_meta = array();
+            
+            foreach ($all_meta as $meta_obj) {
+                $meta_key = $meta_obj->key;
+                $meta_value = $meta_obj->value;
+                
+                // Skip internal WooCommerce meta and already included fallback meta
+                if (in_array($meta_key, array('_qty', '_tax_class', '_product_id', '_variation_id', '_line_subtotal', '_line_total', '_line_tax', '_line_subtotal_tax', '_lazychat_price_fallback', '_lazychat_fallback_source', '_lazychat_fallback_value', '_lazychat_original_price'))) {
+                    continue;
+                }
+                
+                // Separate secure (underscore prefix) from general meta
+                if (strpos($meta_key, '_') === 0) {
+                    // Secure/hidden meta
+                    $secure_meta[] = array(
+                        'key' => $meta_key,
+                        'value' => $meta_value,
+                    );
+                } else {
+                    // Public/general meta
+                    $meta_data[] = array(
+                        'key' => $meta_key,
+                        'value' => $meta_value,
+                    );
+                }
+            }
+            
+            if (!empty($meta_data)) {
+                $line_item_data['meta_data'] = $meta_data;
+            }
+            if (!empty($secure_meta)) {
+                $line_item_data['secure_meta'] = $secure_meta;
             }
             
             // Add variation attributes directly if this is a variation product
