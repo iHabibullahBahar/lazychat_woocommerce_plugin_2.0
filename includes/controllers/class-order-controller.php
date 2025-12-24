@@ -234,7 +234,41 @@ class LazyChat_Order_Controller {
                 $product = wc_get_product($variation_id > 0 ? $variation_id : $product_id);
                 
                 if ($product) {
+                    // Smart price fallback: handle products with null price
+                    $product_price = $product->get_price();
+                    $price_fallback_used = false;
+                    $fallback_source = '';
+                    $fallback_value = '';
+                    
+                    // If price is null or empty, fall back to sale_price or regular_price
+                    if (empty($product_price) || $product_price === '' || $product_price === null) {
+                        $fallback_price = $product->get_sale_price();
+                        
+                        // If sale price is also empty, use regular price
+                        if (empty($fallback_price) || $fallback_price === '' || $fallback_price === null) {
+                            $fallback_price = $product->get_regular_price();
+                            $fallback_source = 'regular_price';
+                        } else {
+                            $fallback_source = 'sale_price';
+                        }
+                        
+                        // If we have a valid fallback price, set it on the product temporarily
+                        if (!empty($fallback_price) && is_numeric($fallback_price)) {
+                            $product->set_price($fallback_price);
+                            $price_fallback_used = true;
+                            $fallback_value = $fallback_price;
+                        }
+                    }
+                    
                     $item_id = $order->add_product($product, $quantity);
+                    
+                    // Store hidden metadata if price fallback was used (underscore prefix hides from frontend)
+                    if ($item_id && $price_fallback_used) {
+                        wc_add_order_item_meta($item_id, '_lazychat_price_fallback', 'yes', true);
+                        wc_add_order_item_meta($item_id, '_lazychat_fallback_source', $fallback_source, true);
+                        wc_add_order_item_meta($item_id, '_lazychat_fallback_value', $fallback_value, true);
+                        wc_add_order_item_meta($item_id, '_lazychat_original_price', 'null', true);
+                    }
                     
                     // Add custom meta data if provided
                     if ($item_id && isset($item['meta_data']) && is_array($item['meta_data'])) {
@@ -399,6 +433,17 @@ class LazyChat_Order_Controller {
                 'permalink' => get_permalink($product->get_id()),
             );
             
+            // Add price fallback information if it exists
+            $price_fallback = wc_get_order_item_meta($item_id, '_lazychat_price_fallback', true);
+            if ($price_fallback === 'yes') {
+                $line_item_data['price_fallback'] = array(
+                    'used' => true,
+                    'source' => wc_get_order_item_meta($item_id, '_lazychat_fallback_source', true),
+                    'value' => wc_get_order_item_meta($item_id, '_lazychat_fallback_value', true),
+                    'original_price' => wc_get_order_item_meta($item_id, '_lazychat_original_price', true),
+                );
+            }
+            
             // Add variation attributes directly if this is a variation product
             if ($product->get_type() === 'variation' && $item->get_variation_id()) {
                 $variation_attributes = array();
@@ -524,30 +569,25 @@ class LazyChat_Order_Controller {
         
         $args = wp_parse_args($args, $defaults);
         
-        // Build query
-        $query_args = array(
-            'limit' => absint($args['limit']),
-            'page' => absint($args['page']),
-            'orderby' => sanitize_text_field($args['orderby']),
-            'order' => sanitize_text_field($args['order']),
-            'return' => 'objects',
-        );
-        
-        // Add status filter if not 'any'
-        if ($args['status'] !== 'any') {
-            $query_args['status'] = sanitize_text_field($args['status']);
-        }
-        
-        // Get orders
-        $orders = wc_get_orders($query_args);
-        
-        // Get total count
-        $total_query_args = $query_args;
-        $total_query_args['limit'] = -1;
-        $total_query_args['paginate'] = true;
-        $total_result = wc_get_orders($total_query_args);
-        $total_orders = $total_result->total;
-        $total_pages = $total_result->max_num_pages;
+// Build query with pagination
+    $query_args = array(
+        'limit' => absint($args['limit']),
+        'page' => absint($args['page']),
+        'orderby' => sanitize_text_field($args['orderby']),
+        'order' => sanitize_text_field($args['order']),
+        'paginate' => true, // This efficiently returns both orders and total count
+    );
+    
+    // Add status filter if not 'any'
+    if ($args['status'] !== 'any') {
+        $query_args['status'] = sanitize_text_field($args['status']);
+    }
+    
+    // Get orders with pagination info in one efficient query
+    $result = wc_get_orders($query_args);
+    $orders = $result->orders;
+    $total_orders = $result->total;
+    $total_pages = $result->max_num_pages;
         
         // Prepare response
         $orders_data = array();
