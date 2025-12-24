@@ -184,6 +184,16 @@ class LazyChat_Order_Controller {
                 $order->save();
             }
             
+            // Reduce stock levels if order status requires it
+            // Stock will be reduced based on WooCommerce settings and order status
+            // Typical statuses that trigger stock reduction: 'processing', 'completed', 'on-hold'
+            if (in_array($order->get_status(), array('processing', 'completed', 'on-hold'))) {
+                // Check if stock has already been reduced
+                if (!$order->get_meta('_order_stock_reduced', true)) {
+                    wc_reduce_stock_levels($order->get_id());
+                }
+            }
+            
             return $order;
             
         } catch (Exception $e) {
@@ -231,28 +241,102 @@ class LazyChat_Order_Controller {
      * Add line items to order
      */
     private static function add_line_items($order, $line_items) {
-        foreach ($line_items as $item) {
+        $errors = array();
+        
+        foreach ($line_items as $index => $item) {
             $product_id = isset($item['product_id']) ? absint($item['product_id']) : 0;
             $quantity = isset($item['quantity']) ? absint($item['quantity']) : 1;
             $variation_id = isset($item['variation_id']) ? absint($item['variation_id']) : 0;
             
-            if ($product_id > 0) {
-                $product = wc_get_product($variation_id > 0 ? $variation_id : $product_id);
+            // Validate product_id
+            if ($product_id <= 0) {
+                $errors[] = sprintf(__('Line item %d: Product ID is required.', 'lazychat'), $index);
+                continue;
+            }
+            
+            // Get the product
+            $product = wc_get_product($variation_id > 0 ? $variation_id : $product_id);
+            
+            // Check if product exists
+            if (!$product) {
+                $errors[] = sprintf(__('Line item #%d: Product ID %d not found.', 'lazychat'), $index + 1, $product_id);
+                continue;
+            }
+            
+            // Get product name for error messages
+            $product_name = $product->get_name();
+            
+            // Check if product is purchasable
+            if (!$product->is_purchasable()) {
+                $errors[] = sprintf(__('Line item #%d: "%s" (ID: %d) is not purchasable.', 'lazychat'), $index + 1, $product_name, $product_id);
+                continue;
+            }
+            
+            // Check stock status (only if managing stock)
+            if ($product->managing_stock()) {
+                if (!$product->has_enough_stock($quantity)) {
+                    $errors[] = sprintf(
+                        __('Line item #%d: "%s" (ID: %d) - Insufficient stock. Available: %d, Requested: %d', 'lazychat'),
+                        $index + 1,
+                        $product_name,
+                        $product_id,
+                        $product->get_stock_quantity(),
+                        $quantity
+                    );
+                    continue;
+                }
+            } elseif ($product->get_stock_status() === 'outofstock') {
+                $errors[] = sprintf(__('Line item #%d: "%s" (ID: %d) is out of stock.', 'lazychat'), $index + 1, $product_name, $product_id);
+                continue;
+            }
+            
+            // Prepare args for adding product
+            $args = array();
+            
+            // Set variation attributes if it's a variation
+            if ($variation_id > 0 && $product->is_type('variation')) {
+                $variation_attributes = $product->get_variation_attributes();
+                if (!empty($variation_attributes)) {
+                    $args['variation'] = $variation_attributes;
+                }
+            }
+            
+            // Add product to order
+            $item_id = $order->add_product($product, $quantity, $args);
+            
+            if (!$item_id) {
+                $errors[] = sprintf(__('Line item #%d: Failed to add "%s" (ID: %d) to order.', 'lazychat'), $index + 1, $product_name, $product_id);
+                continue;
+            }
+            
+            // Get the order item object
+            $order_item = $order->get_item($item_id);
+            
+            // Apply custom price if provided (override product price)
+            if (isset($item['price']) && is_numeric($item['price'])) {
+                $custom_price = floatval($item['price']);
+                $order_item->set_subtotal($custom_price * $quantity);
+                $order_item->set_total($custom_price * $quantity);
                 
-                if ($product) {
-                    // Add product to order
-                    $item_id = $order->add_product($product, $quantity);
-                    
-                    // Add custom meta data if provided
-                    if ($item_id && isset($item['meta_data']) && is_array($item['meta_data'])) {
-                        foreach ($item['meta_data'] as $meta) {
-                            if (isset($meta['key']) && isset($meta['value'])) {
-                                wc_add_order_item_meta($item_id, sanitize_text_field($meta['key']), sanitize_text_field($meta['value']));
-                            }
-                        }
+                // Mark that custom price was used
+                wc_add_order_item_meta($item_id, '_lazychat_custom_price', 'yes', true);
+                wc_add_order_item_meta($item_id, '_lazychat_custom_price_value', $custom_price, true);
+            }
+            
+            // Add custom meta data if provided
+            if (isset($item['meta_data']) && is_array($item['meta_data'])) {
+                foreach ($item['meta_data'] as $meta) {
+                    if (isset($meta['key']) && isset($meta['value'])) {
+                        wc_add_order_item_meta($item_id, sanitize_text_field($meta['key']), sanitize_text_field($meta['value']));
                     }
                 }
             }
+        }
+        
+        // If there were errors, add them to order notes
+        if (!empty($errors)) {
+            $error_message = implode("\n", $errors);
+            $order->add_order_note(__('Order creation warnings:', 'lazychat') . "\n" . $error_message);
         }
     }
     
@@ -273,33 +357,38 @@ class LazyChat_Order_Controller {
                     $quantity = $order_item->get_quantity();
                     $product_price = $product->get_price();
                     
-                    // Check if price fallback is needed
-                    if (empty($product_price) || $product_price === '' || $product_price === null) {
-                        $fallback_price = $product->get_sale_price();
-                        $fallback_source = '';
-                        
-                        // If sale price is also empty, use regular price
-                        if (empty($fallback_price) || $fallback_price === '' || $fallback_price === null) {
-                            $fallback_price = $product->get_regular_price();
-                            $fallback_source = 'regular_price';
-                        } else {
-                            $fallback_source = 'sale_price';
-                        }
-                        
-                        // If we have a valid fallback price, apply it to the order item
-                        if (!empty($fallback_price) && is_numeric($fallback_price)) {
-                            $fallback_price = floatval($fallback_price);
+                    // Skip if custom price was already set
+                    $custom_price_used = wc_get_order_item_meta($item_id, '_lazychat_custom_price', true);
+                    
+                    if ($custom_price_used !== 'yes') {
+                        // Check if price fallback is needed
+                        if (empty($product_price) || $product_price === '' || $product_price === null) {
+                            $fallback_price = $product->get_sale_price();
+                            $fallback_source = '';
                             
-                            // Set the price directly on the order item
-                            $order_item->set_subtotal($fallback_price * $quantity);
-                            $order_item->set_total($fallback_price * $quantity);
-                            $order_item->save();
+                            // If sale price is also empty, use regular price
+                            if (empty($fallback_price) || $fallback_price === '' || $fallback_price === null) {
+                                $fallback_price = $product->get_regular_price();
+                                $fallback_source = 'regular_price';
+                            } else {
+                                $fallback_source = 'sale_price';
+                            }
                             
-                            // Store hidden metadata about price fallback
-                            wc_add_order_item_meta($item_id, '_lazychat_price_fallback', 'yes', true);
-                            wc_add_order_item_meta($item_id, '_lazychat_fallback_source', $fallback_source, true);
-                            wc_add_order_item_meta($item_id, '_lazychat_fallback_value', $fallback_price, true);
-                            wc_add_order_item_meta($item_id, '_lazychat_original_price', 'null', true);
+                            // If we have a valid fallback price, apply it to the order item
+                            if (!empty($fallback_price) && is_numeric($fallback_price)) {
+                                $fallback_price = floatval($fallback_price);
+                                
+                                // Set the price directly on the order item
+                                $order_item->set_subtotal($fallback_price * $quantity);
+                                $order_item->set_total($fallback_price * $quantity);
+                                $order_item->save();
+                                
+                                // Store hidden metadata about price fallback
+                                wc_add_order_item_meta($item_id, '_lazychat_price_fallback', 'yes', true);
+                                wc_add_order_item_meta($item_id, '_lazychat_fallback_source', $fallback_source, true);
+                                wc_add_order_item_meta($item_id, '_lazychat_fallback_value', $fallback_price, true);
+                                wc_add_order_item_meta($item_id, '_lazychat_original_price', 'null', true);
+                            }
                         }
                     }
                 }
@@ -523,6 +612,15 @@ class LazyChat_Order_Controller {
                 'permalink' => get_permalink($product->get_id()),
             );
             
+            // Add custom price information if it exists
+            $custom_price_used = wc_get_order_item_meta($item_id, '_lazychat_custom_price', true);
+            if ($custom_price_used === 'yes') {
+                $line_item_data['custom_price'] = array(
+                    'used' => true,
+                    'value' => wc_get_order_item_meta($item_id, '_lazychat_custom_price_value', true),
+                );
+            }
+            
             // Add price fallback information if it exists
             $price_fallback = wc_get_order_item_meta($item_id, '_lazychat_price_fallback', true);
             if ($price_fallback === 'yes') {
@@ -543,8 +641,8 @@ class LazyChat_Order_Controller {
                 $meta_key = $meta_obj->key;
                 $meta_value = $meta_obj->value;
                 
-                // Skip internal WooCommerce meta and already included fallback meta
-                if (in_array($meta_key, array('_qty', '_tax_class', '_product_id', '_variation_id', '_line_subtotal', '_line_total', '_line_tax', '_line_subtotal_tax', '_lazychat_price_fallback', '_lazychat_fallback_source', '_lazychat_fallback_value', '_lazychat_original_price'))) {
+                // Skip internal WooCommerce meta and already included fallback/custom price meta
+                if (in_array($meta_key, array('_qty', '_tax_class', '_product_id', '_variation_id', '_line_subtotal', '_line_total', '_line_tax', '_line_subtotal_tax', '_lazychat_price_fallback', '_lazychat_fallback_source', '_lazychat_fallback_value', '_lazychat_original_price', '_lazychat_custom_price', '_lazychat_custom_price_value'))) {
                     continue;
                 }
                 
