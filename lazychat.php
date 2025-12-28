@@ -28,6 +28,7 @@ define('LAZYCHAT_VERSION', '1.4.7');
 define('LAZYCHAT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LAZYCHAT_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LAZYCHAT_PLUGIN_BASENAME', plugin_basename(__FILE__));
+define('LAZYCHAT_REST_API_CHECK_CACHE_DURATION', 30 * MINUTE_IN_SECONDS); // Cache REST API check for 30 minutes
 
 /**
  * Check if WooCommerce is active
@@ -168,20 +169,52 @@ add_action('lazychat_cleanup_old_logs', 'lazychat_cleanup_old_logs');
  * Check if REST API is working
  */
 function lazychat_check_rest_api() {
-    // Make a test request to WordPress REST API
-    $rest_url = rest_url();
-    $response = wp_remote_get($rest_url, array(
-        'timeout' => 5,
-        'sslverify' => false
-    ));
+    // Check cached result first (cache duration set by LAZYCHAT_REST_API_CHECK_CACHE_DURATION constant)
+    $cached_result = get_transient('lazychat_rest_api_check');
+    if ($cached_result !== false) {
+        return $cached_result === 'working';
+    }
     
-    if (is_wp_error($response)) {
+    // First check: Verify permalink structure (Plain permalinks break REST API)
+    $permalink_structure = get_option('permalink_structure');
+    if (empty($permalink_structure)) {
+        // Permalinks are set to Plain - REST API won't work properly
+        set_transient('lazychat_rest_api_check', 'not_working', LAZYCHAT_REST_API_CHECK_CACHE_DURATION);
         return false;
     }
     
-    $response_code = wp_remote_retrieve_response_code($response);
-    // 200 or 401 (unauthorized but API is working) are acceptable
-    return in_array($response_code, array(200, 401));
+    // Second check: Make a test request to WordPress REST API
+    $rest_url = rest_url();
+    $response = wp_remote_get($rest_url, array(
+        'timeout' => 10, // Increased from 5 to 10 seconds to match manual test
+        'sslverify' => false
+    ));
+    
+    $is_working = false;
+    
+    if (is_wp_error($response)) {
+        // If first attempt fails, retry once to avoid false positives from temporary issues
+        $response = wp_remote_get($rest_url, array(
+            'timeout' => 10,
+            'sslverify' => false
+        ));
+        
+        if (is_wp_error($response)) {
+            $is_working = false;
+        } else {
+            $response_code = wp_remote_retrieve_response_code($response);
+            $is_working = in_array($response_code, array(200, 401));
+        }
+    } else {
+        $response_code = wp_remote_retrieve_response_code($response);
+        // 200 or 401 (unauthorized but API is working) are acceptable
+        $is_working = in_array($response_code, array(200, 401));
+    }
+    
+    // Cache the result
+    set_transient('lazychat_rest_api_check', $is_working ? 'working' : 'not_working', LAZYCHAT_REST_API_CHECK_CACHE_DURATION);
+    
+    return $is_working;
 }
 
 /**
@@ -206,36 +239,66 @@ function lazychat_rest_api_error_notice() {
     }
     
     $settings_url = admin_url('options-general.php?page=lazychat_settings');
-    $permalink_url = admin_url('options-permalink.php');
-    $dismiss_url = add_query_arg('lazychat_dismiss_rest_notice', '1');
     
     ?>
-    <div class="notice notice-error is-dismissible" style="position: relative;">
-        <p><strong><?php esc_html_e('LazyChat: REST API Not Working', 'lazychat'); ?></strong></p>
-        <p><?php esc_html_e('The WordPress REST API is not accessible on your site. This will prevent LazyChat from functioning properly.', 'lazychat'); ?></p>
-        <p><?php esc_html_e('Common solutions:', 'lazychat'); ?></p>
-        <ol>
-            <li><?php esc_html_e('Make sure your permalinks are NOT set to "Plain". Visit', 'lazychat'); ?> <a href="<?php echo esc_url($permalink_url); ?>"><?php esc_html_e('Permalink Settings', 'lazychat'); ?></a> <?php esc_html_e('and select any option except "Plain", then click "Save Changes".', 'lazychat'); ?></li>
-            <li><?php esc_html_e('Click the "Fix REST API" button in', 'lazychat'); ?> <a href="<?php echo esc_url($settings_url); ?>"><?php esc_html_e('LazyChat Settings', 'lazychat'); ?></a></li>
-            <li><?php esc_html_e('Contact your hosting provider if the issue persists - they may have REST API disabled.', 'lazychat'); ?></li>
-        </ol>
-        <p><a href="<?php echo esc_url($dismiss_url); ?>" class="button"><?php esc_html_e('Dismiss this notice', 'lazychat'); ?></a></p>
+    <div class="notice notice-warning is-dismissible lazychat-rest-notice">
+        <p>
+            <strong><?php esc_html_e('LazyChat:', 'lazychat'); ?></strong> 
+            <?php esc_html_e('WordPress REST API is not accessible.', 'lazychat'); ?> 
+            <a href="<?php echo esc_url($settings_url); ?>"><?php esc_html_e('Go to LazyChat Settings to fix this issue.', 'lazychat'); ?></a>
+        </p>
     </div>
+    <script>
+    jQuery(document).ready(function($) {
+        $('.lazychat-rest-notice').on('click', '.notice-dismiss', function() {
+            $.post(ajaxurl, {
+                action: 'lazychat_dismiss_rest_notice',
+                nonce: '<?php echo esc_js(wp_create_nonce('lazychat_dismiss_rest_notice')); ?>'
+            });
+        });
+    });
+    </script>
     <?php
 }
 add_action('admin_notices', 'lazychat_rest_api_error_notice');
 
 /**
- * Handle REST API notice dismissal
+ * Handle REST API notice dismissal via AJAX
  */
-function lazychat_handle_rest_api_notice_dismissal() {
-    if (isset($_GET['lazychat_dismiss_rest_notice']) && current_user_can('manage_options')) {
-        update_option('lazychat_rest_api_notice_dismissed', true);
-        wp_safe_redirect(remove_query_arg('lazychat_dismiss_rest_notice'));
-        exit;
+add_action('wp_ajax_lazychat_dismiss_rest_notice', function() {
+    // Verify nonce
+    if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'lazychat_dismiss_rest_notice')) {
+        wp_send_json_error();
     }
-}
-add_action('admin_init', 'lazychat_handle_rest_api_notice_dismissal');
+    
+    // Check permissions
+    if (current_user_can('manage_options')) {
+        update_option('lazychat_rest_api_notice_dismissed', true);
+        // Clear the check cache so it rechecks later
+        delete_transient('lazychat_rest_api_check');
+        wp_send_json_success();
+    }
+    wp_send_json_error();
+});
+
+/**
+ * Clear REST API check cache when permalink structure changes
+ */
+add_action('update_option_permalink_structure', function() {
+    delete_transient('lazychat_rest_api_check');
+    delete_option('lazychat_rest_api_notice_dismissed');
+});
+
+/**
+ * Clear REST API check cache when rewrite rules are flushed
+ */
+add_action('wp_loaded', function() {
+    // Check if this is a permalink save action
+    if (isset($_POST['permalink_structure']) && current_user_can('manage_options')) {
+        delete_transient('lazychat_rest_api_check');
+        delete_option('lazychat_rest_api_notice_dismissed');
+    }
+}, 999);
 
 /**
  * Check for plugin updates and notify LazyChat

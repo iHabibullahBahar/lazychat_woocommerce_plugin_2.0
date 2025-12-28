@@ -1237,6 +1237,10 @@ class LazyChat_Ajax_Handlers {
             return;
         }
         
+        // Clear cache and dismissal flag before testing to get fresh results
+        delete_transient('lazychat_rest_api_check');
+        delete_option('lazychat_rest_api_notice_dismissed');
+        
         // Send event notification
         if (function_exists('lazychat_send_event_notification')) {
             lazychat_send_event_notification('diagnostic.rest_api_test', array(
@@ -1308,9 +1312,18 @@ class LazyChat_Ajax_Handlers {
 
         // Overall status
         $all_ok = $rest_api_working && $lazychat_endpoint_working && $permalink_ok;
+        
+        // Cache the new result (including permalink check)
+        // Dashboard notice should reflect the overall status including permalinks
+        if ($all_ok) {
+            set_transient('lazychat_rest_api_check', 'working', LAZYCHAT_REST_API_CHECK_CACHE_DURATION);
+        } else {
+            set_transient('lazychat_rest_api_check', 'not_working', LAZYCHAT_REST_API_CHECK_CACHE_DURATION);
+        }
 
         wp_send_json_success(array(
             'overall_status' => $all_ok,
+            
             'tests' => array(
                 'rest_api' => array(
                     'status' => $rest_api_working,
@@ -1358,13 +1371,15 @@ class LazyChat_Ajax_Handlers {
         $permalink_structure = get_option('permalink_structure');
         if (empty($permalink_structure)) {
             // Set to post name structure (recommended for REST API)
+            // Note: WordPress automatically handles redirects from old ?p=123 URLs to new pretty URLs
             update_option('permalink_structure', '/%postname%/');
             flush_rewrite_rules();
-            $actions_taken[] = __('Changed permalink structure from "Plain" to "Post name"', 'lazychat');
+            $actions_taken[] = __('Changed permalink structure from "Plain" to "Post name" (WordPress will auto-redirect old URLs)', 'lazychat');
         }
 
         // Action 3: Clear any REST API related transients
         delete_transient('rest_api_test');
+        delete_transient('lazychat_rest_api_check');
         $actions_taken[] = __('Cleared REST API cache', 'lazychat');
 
         // Action 4: Remove REST API notice dismissal so it shows again if still broken
@@ -1381,6 +1396,9 @@ class LazyChat_Ajax_Handlers {
         if (!is_wp_error($response)) {
             $response_code = wp_remote_retrieve_response_code($response);
             if (in_array($response_code, array(200, 401))) {
+                // Cache the successful result so dashboard notice updates immediately
+                set_transient('lazychat_rest_api_check', 'working', LAZYCHAT_REST_API_CHECK_CACHE_DURATION);
+                
                 wp_send_json_success(array(
                     'message' => __('REST API has been fixed successfully!', 'lazychat'),
                     'actions' => $actions_taken,

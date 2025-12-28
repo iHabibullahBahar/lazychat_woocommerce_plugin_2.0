@@ -1660,6 +1660,13 @@ jQuery(document).ready(function($) {
                     
                     if (!data.overall_status) {
                         html += '<br><p><strong>Recommended Action:</strong> Click the "Fix REST API" button below to automatically resolve common issues.</p>';
+                    } else {
+                        html += '<br><p style="color: #46b450;">✅ <strong>All systems operational!</strong></p>';
+                        
+                        // Remove the dashboard warning notice silently if tests pass
+                        $('.lazychat-rest-notice').fadeOut(400, function() {
+                            $(this).remove();
+                        });
                     }
                     
                     html += '</div>';
@@ -1688,7 +1695,7 @@ jQuery(document).ready(function($) {
         const $status = $('#lazychat_rest_api_status');
         const originalText = $button.html();
         
-        if (!confirm('This will flush rewrite rules and may update your permalink structure. Continue?')) {
+        if (!confirm('This will:\n\n• Flush rewrite rules\n• Change permalink structure from "Plain" to "Post name" (if needed)\n• Clear REST API cache\n\nNote: WordPress automatically redirects old URLs, so your existing links will still work.\n\nContinue?')) {
             return;
         }
         
@@ -1726,6 +1733,11 @@ jQuery(document).ready(function($) {
                     
                     if (data.working) {
                         html += '<br><p>You can verify the fix by clicking "Test REST API" again.</p>';
+                        
+                        // Remove the LazyChat REST API warning notice from dashboard silently
+                        $('.lazychat-rest-notice').fadeOut(400, function() {
+                            $(this).remove();
+                        });
                     }
                     
                     html += '</div>';

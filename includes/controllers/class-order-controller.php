@@ -12,6 +12,147 @@ if (!defined('ABSPATH')) {
 class LazyChat_Order_Controller {
     
     /**
+     * Prepare and populate an order with data (shared logic for create and calculate)
+     * 
+     * @param WC_Order $order Order object to populate
+     * @param array $data Order data
+     * @param bool $create_customer Whether to create customer if not exists
+     * @param bool $for_calculation Whether this is for calculation only (no status change)
+     * @return true|WP_Error True on success, WP_Error on failure
+     */
+    private static function prepare_order($order, $data, $create_customer = false, $for_calculation = false) {
+        // Set order status (skip for calculations to prevent stock reduction)
+        if (!$for_calculation && isset($data['status'])) {
+            $order->set_status(sanitize_text_field($data['status']));
+        }
+        
+        // Set customer
+        $customer_id = self::resolve_customer($data, $create_customer);
+        if ($customer_id > 0) {
+            $order->set_customer_id($customer_id);
+        }
+        
+        // Set addresses
+        if (isset($data['billing'])) {
+            self::set_billing_address($order, $data['billing']);
+        }
+        if (isset($data['shipping'])) {
+            self::set_shipping_address($order, $data['shipping']);
+        }
+        
+        // Add line items
+        $line_items_data = isset($data['line_items']) && is_array($data['line_items']) ? $data['line_items'] : array();
+        if (!empty($line_items_data)) {
+            $line_items_result = self::add_line_items($order, $line_items_data);
+            if (is_wp_error($line_items_result)) {
+                return $line_items_result;
+            }
+        }
+        
+        // Add shipping, fees, coupons
+        if (isset($data['shipping_lines']) && is_array($data['shipping_lines'])) {
+            self::add_shipping_lines($order, $data['shipping_lines']);
+        }
+        if (isset($data['fee_lines']) && is_array($data['fee_lines'])) {
+            self::add_fee_lines($order, $data['fee_lines']);
+        }
+        if (isset($data['coupon_lines']) && is_array($data['coupon_lines'])) {
+            $coupon_result = self::add_coupon_lines($order, $data['coupon_lines']);
+            if (is_wp_error($coupon_result)) {
+                return $coupon_result;
+            }
+        }
+        
+        // Set payment and order details
+        self::set_order_details($order, $data);
+        
+        // Calculate totals
+        $order->calculate_totals();
+        
+        // Apply price fallbacks
+        if (!empty($line_items_data)) {
+            self::apply_price_fallbacks($order, $line_items_data);
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Resolve customer ID from data
+     * 
+     * @param array $data Order data
+     * @param bool $create_if_missing Whether to create customer if not exists
+     * @return int Customer ID (0 for guest)
+     */
+    private static function resolve_customer($data, $create_if_missing = false) {
+        $customer_id = 0;
+        
+        if (isset($data['customer_id'])) {
+            $customer_id = absint($data['customer_id']);
+            if ($customer_id > 0) {
+                $customer = new WC_Customer($customer_id);
+                if (!$customer->get_id()) {
+                    $customer_id = 0;
+                }
+            }
+        } elseif (isset($data['billing']['email'])) {
+            $email = sanitize_email($data['billing']['email']);
+            if (is_email($email)) {
+                $user = get_user_by('email', $email);
+                if ($user) {
+                    $customer_id = $user->ID;
+                } elseif ($create_if_missing) {
+                    $customer_data = array(
+                        'email' => $email,
+                        'billing' => isset($data['billing']) ? $data['billing'] : array(),
+                        'shipping' => isset($data['shipping']) ? $data['shipping'] : array(),
+                        'first_name' => isset($data['billing']['first_name']) ? $data['billing']['first_name'] : '',
+                        'last_name' => isset($data['billing']['last_name']) ? $data['billing']['last_name'] : '',
+                        'phone' => isset($data['billing']['phone']) ? $data['billing']['phone'] : ''
+                    );
+                    
+                    $customer_result = LazyChat_Customer_Controller::create_customer($customer_data);
+                    if (!is_wp_error($customer_result) && isset($customer_result['id'])) {
+                        $customer_id = $customer_result['id'];
+                    }
+                }
+            }
+        }
+        
+        return $customer_id;
+    }
+    
+    /**
+     * Set order details (payment, meta, currency, etc.)
+     * 
+     * @param WC_Order $order Order object
+     * @param array $data Order data
+     */
+    private static function set_order_details($order, $data) {
+        if (isset($data['payment_method'])) {
+            $order->set_payment_method(sanitize_text_field($data['payment_method']));
+        }
+        if (isset($data['payment_method_title'])) {
+            $order->set_payment_method_title(sanitize_text_field($data['payment_method_title']));
+        }
+        if (isset($data['transaction_id'])) {
+            $order->set_transaction_id(sanitize_text_field($data['transaction_id']));
+        }
+        if (isset($data['customer_note'])) {
+            $order->set_customer_note(sanitize_textarea_field($data['customer_note']));
+        }
+        if (isset($data['meta_data']) && is_array($data['meta_data'])) {
+            self::add_meta_data($order, $data['meta_data']);
+        }
+        if (isset($data['currency'])) {
+            $order->set_currency(sanitize_text_field($data['currency']));
+        }
+        if (isset($data['prices_include_tax'])) {
+            $order->set_prices_include_tax((bool) $data['prices_include_tax']);
+        }
+    }
+    
+    /**
      * Create a new WooCommerce order
      * 
      * @param array $data Order data
@@ -27,7 +168,6 @@ class LazyChat_Order_Controller {
         }
         
         try {
-            // Create new order
             $order = wc_create_order();
             
             if (is_wp_error($order)) {
@@ -38,139 +178,22 @@ class LazyChat_Order_Controller {
                 );
             }
             
-            // Set order status
-            if (isset($data['status'])) {
-                $order->set_status(sanitize_text_field($data['status']));
+            // Prepare order with all data (create customer = true, for calculation = false)
+            $prepare_result = self::prepare_order($order, $data, true, false);
+            if (is_wp_error($prepare_result)) {
+                $order->delete(true);
+                return $prepare_result;
             }
             
-            // Check if email matches an existing customer and set customer_id
-            $customer_id = 0;
-            if (isset($data['customer_id'])) {
-                // Use provided customer_id if available
-                $customer_id = absint($data['customer_id']);
-            } elseif (isset($data['billing']['email'])) {
-                // Check if email matches an existing customer
-                $email = sanitize_email($data['billing']['email']);
-                if (is_email($email)) {
-                    $user = get_user_by('email', $email);
-                    if ($user) {
-                        // Customer exists
-                        $customer_id = $user->ID;
-                    } else {
-                        // Customer doesn't exist, create new customer
-                        $customer_data = array(
-                            'email' => $email,
-                            'billing' => isset($data['billing']) ? $data['billing'] : array(),
-                            'shipping' => isset($data['shipping']) ? $data['shipping'] : array()
-                        );
-                        
-                        // Add first and last name if available
-                        if (isset($data['billing']['first_name'])) {
-                            $customer_data['first_name'] = $data['billing']['first_name'];
-                        }
-                        if (isset($data['billing']['last_name'])) {
-                            $customer_data['last_name'] = $data['billing']['last_name'];
-                        }
-                        if (isset($data['billing']['phone'])) {
-                            $customer_data['phone'] = $data['billing']['phone'];
-                        }
-                        
-                        // Create the customer
-                        $customer_result = LazyChat_Customer_Controller::create_customer($customer_data);
-                        
-                        // If customer creation successful, use the new customer ID
-                        if (!is_wp_error($customer_result) && isset($customer_result['id'])) {
-                            $customer_id = $customer_result['id'];
-                        }
-                        // If customer creation fails, order will be created as guest order (customer_id = 0)
-                    }
-                }
-            }
-            
-            // Set customer ID if found or provided
-            if ($customer_id > 0) {
-                $order->set_customer_id($customer_id);
-            }
-            
-            // Set billing address
-            if (isset($data['billing'])) {
-                self::set_billing_address($order, $data['billing']);
-            }
-            
-            // Set shipping address
-            if (isset($data['shipping'])) {
-                self::set_shipping_address($order, $data['shipping']);
-            }
-            
-            // Add line items (products) - store line items data for later processing
-            $line_items_data = isset($data['line_items']) && is_array($data['line_items']) ? $data['line_items'] : array();
-            if (!empty($line_items_data)) {
-                self::add_line_items($order, $line_items_data);
-            }
-            
-            // Add shipping lines
-            if (isset($data['shipping_lines']) && is_array($data['shipping_lines'])) {
-                self::add_shipping_lines($order, $data['shipping_lines']);
-            }
-            
-            // Add fee lines
-            if (isset($data['fee_lines']) && is_array($data['fee_lines'])) {
-                self::add_fee_lines($order, $data['fee_lines']);
-            }
-            
-            // Add coupon lines
-            if (isset($data['coupon_lines']) && is_array($data['coupon_lines'])) {
-                self::add_coupon_lines($order, $data['coupon_lines']);
-            }
-            
-            // Set payment method
-            if (isset($data['payment_method'])) {
-                $order->set_payment_method(sanitize_text_field($data['payment_method']));
-            }
-            if (isset($data['payment_method_title'])) {
-                $order->set_payment_method_title(sanitize_text_field($data['payment_method_title']));
-            }
-            
-            // Set transaction ID
-            if (isset($data['transaction_id'])) {
-                $order->set_transaction_id(sanitize_text_field($data['transaction_id']));
-            }
-            
-            // Set customer note
-            if (isset($data['customer_note'])) {
-                $order->set_customer_note(sanitize_textarea_field($data['customer_note']));
-            }
-            
-            // Add meta data
-            if (isset($data['meta_data']) && is_array($data['meta_data'])) {
-                self::add_meta_data($order, $data['meta_data']);
-            }
-            
-            // Set order source to LazyChat using WooCommerce's standard field
+            // Set order source
             $order->set_created_via('lazychat');
             
-            // Set currency
-            if (isset($data['currency'])) {
-                $order->set_currency(sanitize_text_field($data['currency']));
-            }
-            
-            // Set prices include tax
-            if (isset($data['prices_include_tax'])) {
-                $order->set_prices_include_tax((bool) $data['prices_include_tax']);
-            }
-            
-            // Calculate totals
-            $order->calculate_totals();
-            
-            // Re-apply price fallbacks after calculate_totals() to ensure they stick
-            if (!empty($line_items_data)) {
-                self::apply_price_fallbacks($order, $line_items_data);
-            }
-            
-            // Save the order (this saves both the order and the corrected totals)
+            // Save the order
             $order_id = $order->save();
             
             if (!$order_id) {
+                // Delete the order if save failed
+                $order->delete(true);
                 return new WP_Error(
                     'order_save_failed',
                     __('Failed to save order.', 'lazychat'),
@@ -179,8 +202,10 @@ class LazyChat_Order_Controller {
             }
             
             // Set order date if provided
-            if (isset($data['date_created'])) {
-                $order->set_date_created(sanitize_text_field($data['date_created']));
+            if (isset($data['date_created']) && !empty($data['date_created'])) {
+                // WooCommerce accepts timestamp, DateTime object, or date string
+                // No sanitization needed as set_date_created handles it internally
+                $order->set_date_created($data['date_created']);
                 $order->save();
             }
             
@@ -197,12 +222,168 @@ class LazyChat_Order_Controller {
             return $order;
             
         } catch (Exception $e) {
+            // Clean up: delete the order if it was created
+            if (isset($order) && is_object($order) && method_exists($order, 'get_id') && $order->get_id()) {
+                $order->delete(true);
+            }
+            
             return new WP_Error(
                 'order_creation_exception',
                 $e->getMessage(),
                 array('status' => 500)
             );
         }
+    }
+    
+    /**
+     * Calculate order totals without creating a permanent order
+     * This function simulates order creation to get accurate pricing calculations
+     * 
+     * @param array $data Order data (same format as create_order)
+     * @return array|WP_Error Array with calculated totals on success, WP_Error on failure
+     */
+    public static function calculate_order_totals($data) {
+        if (empty($data)) {
+            return new WP_Error(
+                'invalid_order_data',
+                __('Invalid order data.', 'lazychat'),
+                array('status' => 400)
+            );
+        }
+        
+        $temp_order = null;
+        
+        try {
+            // Prevent stock reduction during calculation
+            add_filter('woocommerce_can_reduce_order_stock', '__return_false', 999);
+            add_filter('woocommerce_payment_complete_reduce_order_stock', '__return_false', 999);
+            
+            $temp_order = wc_create_order();
+            
+            if (is_wp_error($temp_order)) {
+                // Remove filters
+                remove_filter('woocommerce_can_reduce_order_stock', '__return_false', 999);
+                remove_filter('woocommerce_payment_complete_reduce_order_stock', '__return_false', 999);
+                
+                return new WP_Error(
+                    'calculation_failed',
+                    __('Failed to initialize calculation.', 'lazychat'),
+                    array('status' => 500)
+                );
+            }
+            
+            // Prepare order with all data (don't create customer, for calculation = true)
+            $prepare_result = self::prepare_order($temp_order, $data, false, true);
+            if (is_wp_error($prepare_result)) {
+                $temp_order->delete(true);
+                // Remove filters
+                remove_filter('woocommerce_can_reduce_order_stock', '__return_false', 999);
+                remove_filter('woocommerce_payment_complete_reduce_order_stock', '__return_false', 999);
+                return $prepare_result;
+            }
+            
+            // Extract calculated totals
+            $calculated_totals = self::extract_order_totals($temp_order);
+            
+            // Delete the temporary order
+            $temp_order->delete(true);
+            
+            // Remove filters
+            remove_filter('woocommerce_can_reduce_order_stock', '__return_false', 999);
+            remove_filter('woocommerce_payment_complete_reduce_order_stock', '__return_false', 999);
+            
+            return $calculated_totals;
+            
+        } catch (Exception $e) {
+            // Clean up: delete the temp order if it was created
+            if (isset($temp_order) && is_object($temp_order) && method_exists($temp_order, 'get_id') && $temp_order->get_id()) {
+                $temp_order->delete(true);
+            }
+            
+            // Remove filters
+            remove_filter('woocommerce_can_reduce_order_stock', '__return_false', 999);
+            remove_filter('woocommerce_payment_complete_reduce_order_stock', '__return_false', 999);
+            
+            return new WP_Error(
+                'calculation_exception',
+                $e->getMessage(),
+                array('status' => 500)
+            );
+        }
+    }
+    
+    /**
+     * Extract order totals and breakdown from an order object
+     * 
+     * @param WC_Order $order Order object
+     * @return array Calculated totals and breakdown
+     */
+    private static function extract_order_totals($order) {
+        $totals = array(
+            'subtotal' => $order->get_subtotal(),
+            'discount_total' => $order->get_discount_total(),
+            'shipping_total' => $order->get_shipping_total(),
+            'fee_total' => 0,
+            'tax_total' => $order->get_total_tax(),
+            'total' => $order->get_total(),
+            'currency' => $order->get_currency(),
+            'line_items' => array(),
+            'shipping_lines' => array(),
+            'fee_lines' => array(),
+            'coupon_lines' => array()
+        );
+        
+        // Calculate total fees
+        foreach ($order->get_fees() as $fee) {
+            $totals['fee_total'] += floatval($fee->get_total());
+        }
+        
+        // Get line items breakdown
+        foreach ($order->get_items() as $item_id => $item) {
+            $product = $item->get_product();
+            if ($product) {
+                $totals['line_items'][] = array(
+                    'name' => $item->get_name(),
+                    'product_id' => $item->get_product_id(),
+                    'variation_id' => $item->get_variation_id(),
+                    'quantity' => $item->get_quantity(),
+                    'subtotal' => $item->get_subtotal(),
+                    'total' => $item->get_total(),
+                    'tax' => $item->get_total_tax(),
+                    'price_per_item' => $item->get_quantity() > 0 ? round($item->get_total() / $item->get_quantity(), 2) : 0
+                );
+            }
+        }
+        
+        // Get shipping lines breakdown
+        foreach ($order->get_shipping_methods() as $shipping) {
+            $totals['shipping_lines'][] = array(
+                'method_id' => $shipping->get_method_id(),
+                'method_title' => $shipping->get_method_title(),
+                'total' => $shipping->get_total(),
+                'total_tax' => $shipping->get_total_tax()
+            );
+        }
+        
+        // Get fee lines breakdown
+        foreach ($order->get_fees() as $fee) {
+            $totals['fee_lines'][] = array(
+                'name' => $fee->get_name(),
+                'total' => $fee->get_total(),
+                'total_tax' => $fee->get_total_tax()
+            );
+        }
+        
+        // Get coupon lines breakdown
+        foreach ($order->get_coupons() as $coupon) {
+            $totals['coupon_lines'][] = array(
+                'code' => $coupon->get_code(),
+                'discount' => $coupon->get_discount(),
+                'discount_tax' => $coupon->get_discount_tax()
+            );
+        }
+        
+        return $totals;
     }
     
     /**
@@ -239,6 +420,8 @@ class LazyChat_Order_Controller {
     
     /**
      * Add line items to order
+     * 
+     * @return true|WP_Error True on success, WP_Error if any validation fails
      */
     private static function add_line_items($order, $line_items) {
         $errors = array();
@@ -250,16 +433,39 @@ class LazyChat_Order_Controller {
             
             // Validate product_id
             if ($product_id <= 0) {
-                $errors[] = sprintf(__('Line item %d: Product ID is required.', 'lazychat'), $index);
+                $errors[] = array(
+                    'line_item' => $index + 1,
+                    'error' => 'missing_product_id',
+                    'message' => __('Product ID is required.', 'lazychat')
+                );
                 continue;
             }
             
-            // Get the product
+            // Validate quantity
+            if ($quantity <= 0) {
+                $errors[] = array(
+                    'line_item' => $index + 1,
+                    'product_id' => $product_id,
+                    'error' => 'invalid_quantity',
+                    'message' => __('Quantity must be at least 1.', 'lazychat')
+                );
+                continue;
+            }
+            
+            // Get the product (variation takes priority)
             $product = wc_get_product($variation_id > 0 ? $variation_id : $product_id);
+            
+            // The actual ID being used (variation ID if it's a variation, otherwise product ID)
+            $actual_product_id = $variation_id > 0 ? $variation_id : $product_id;
             
             // Check if product exists
             if (!$product) {
-                $errors[] = sprintf(__('Line item #%d: Product ID %d not found.', 'lazychat'), $index + 1, $product_id);
+                $errors[] = array(
+                    'line_item' => $index + 1,
+                    'product_id' => $actual_product_id,
+                    'error' => 'product_not_found',
+                    'message' => __('Product not found.', 'lazychat')
+                );
                 continue;
             }
             
@@ -268,26 +474,56 @@ class LazyChat_Order_Controller {
             
             // Check if product is purchasable
             if (!$product->is_purchasable()) {
-                $errors[] = sprintf(__('Line item #%d: "%s" (ID: %d) is not purchasable.', 'lazychat'), $index + 1, $product_name, $product_id);
+                $errors[] = array(
+                    'line_item' => $index + 1,
+                    'product_id' => $actual_product_id,
+                    'product_name' => $product_name,
+                    'error' => 'not_purchasable',
+                    'message' => __('Product is not purchasable.', 'lazychat')
+                );
                 continue;
             }
             
             // Check stock status (only if managing stock)
             if ($product->managing_stock()) {
                 if (!$product->has_enough_stock($quantity)) {
-                    $errors[] = sprintf(
-                        __('Line item #%d: "%s" (ID: %d) - Insufficient stock. Available: %d, Requested: %d', 'lazychat'),
-                        $index + 1,
-                        $product_name,
-                        $product_id,
-                        $product->get_stock_quantity(),
-                        $quantity
+                    $errors[] = array(
+                        'line_item' => $index + 1,
+                        'product_id' => $actual_product_id,
+                        'product_name' => $product_name,
+                        'error' => 'insufficient_stock',
+                        'message' => __('Insufficient stock.', 'lazychat'),
+                        'stock_available' => $product->get_stock_quantity(),
+                        'stock_requested' => $quantity
                     );
                     continue;
                 }
             } elseif ($product->get_stock_status() === 'outofstock') {
-                $errors[] = sprintf(__('Line item #%d: "%s" (ID: %d) is out of stock.', 'lazychat'), $index + 1, $product_name, $product_id);
+                $errors[] = array(
+                    'line_item' => $index + 1,
+                    'product_id' => $actual_product_id,
+                    'product_name' => $product_name,
+                    'error' => 'out_of_stock',
+                    'message' => __('Product is out of stock.', 'lazychat')
+                );
                 continue;
+            }
+            
+            // Validate custom price if provided (BEFORE adding product)
+            if (isset($item['price']) && is_numeric($item['price'])) {
+                $custom_price = floatval($item['price']);
+                
+                // Validate price is not negative
+                if ($custom_price < 0) {
+                    $errors[] = array(
+                        'line_item' => $index + 1,
+                        'product_id' => $actual_product_id,
+                        'product_name' => $product_name,
+                        'error' => 'invalid_price',
+                        'message' => __('Price cannot be negative.', 'lazychat')
+                    );
+                    continue;
+                }
             }
             
             // Prepare args for adding product
@@ -305,16 +541,23 @@ class LazyChat_Order_Controller {
             $item_id = $order->add_product($product, $quantity, $args);
             
             if (!$item_id) {
-                $errors[] = sprintf(__('Line item #%d: Failed to add "%s" (ID: %d) to order.', 'lazychat'), $index + 1, $product_name, $product_id);
+                $errors[] = array(
+                    'line_item' => $index + 1,
+                    'product_id' => $actual_product_id,
+                    'product_name' => $product_name,
+                    'error' => 'failed_to_add',
+                    'message' => __('Failed to add product to order.', 'lazychat')
+                );
                 continue;
             }
             
             // Get the order item object
             $order_item = $order->get_item($item_id);
             
-            // Apply custom price if provided (override product price)
+            // Apply custom price if provided (already validated above)
             if (isset($item['price']) && is_numeric($item['price'])) {
                 $custom_price = floatval($item['price']);
+                
                 $order_item->set_subtotal($custom_price * $quantity);
                 $order_item->set_total($custom_price * $quantity);
                 
@@ -327,17 +570,33 @@ class LazyChat_Order_Controller {
             if (isset($item['meta_data']) && is_array($item['meta_data'])) {
                 foreach ($item['meta_data'] as $meta) {
                     if (isset($meta['key']) && isset($meta['value'])) {
-                        wc_add_order_item_meta($item_id, sanitize_text_field($meta['key']), sanitize_text_field($meta['value']));
+                        $key = sanitize_text_field($meta['key']);
+                        $value = $meta['value'];
+                        
+                        // Only sanitize if it's a string, preserve arrays and objects
+                        if (is_string($value)) {
+                            $value = sanitize_text_field($value);
+                        }
+                        
+                        wc_add_order_item_meta($item_id, $key, $value);
                     }
                 }
             }
         }
         
-        // If there were errors, add them to order notes
+        // If there were any errors, return WP_Error to prevent order creation
         if (!empty($errors)) {
-            $error_message = implode("\n", $errors);
-            $order->add_order_note(__('Order creation warnings:', 'lazychat') . "\n" . $error_message);
+            return new WP_Error(
+                'line_items_validation_failed',
+                __('Order cannot be created due to the following issues.', 'lazychat'),
+                array(
+                    'status' => 400,
+                    'errors' => $errors
+                )
+            );
         }
+        
+        return true;
     }
     
     /**
@@ -378,9 +637,24 @@ class LazyChat_Order_Controller {
                             if (!empty($fallback_price) && is_numeric($fallback_price)) {
                                 $fallback_price = floatval($fallback_price);
                                 
-                                // Set the price directly on the order item
+                                // Get current totals to check if discount was applied
+                                $current_item_total = floatval($order_item->get_total());
+                                $current_item_subtotal = floatval($order_item->get_subtotal());
+                                
+                                // Set the new subtotal
                                 $order_item->set_subtotal($fallback_price * $quantity);
-                                $order_item->set_total($fallback_price * $quantity);
+                                
+                                // Calculate new total preserving discount ratio if discount was applied
+                                if ($current_item_subtotal > 0 && $current_item_total < $current_item_subtotal) {
+                                    // Discount was applied, preserve the ratio
+                                    $discount_ratio = $current_item_total / $current_item_subtotal;
+                                    $new_total = ($fallback_price * $quantity) * $discount_ratio;
+                                    $order_item->set_total($new_total);
+                                } else {
+                                    // No discount, use full price
+                                    $order_item->set_total($fallback_price * $quantity);
+                                }
+                                
                                 $order_item->save();
                                 
                                 // Store hidden metadata about price fallback
@@ -406,6 +680,7 @@ class LazyChat_Order_Controller {
         }
         
         // Calculate final order total including all components
+        // Note: $items_total already includes discounts (coupons are applied to line items)
         $total = $items_total;
         $total += floatval($order->get_shipping_total());
         $total += floatval($order->get_total_tax());
@@ -415,8 +690,8 @@ class LazyChat_Order_Controller {
             $total += floatval($fee->get_total());
         }
         
-        // Subtract discounts (coupons)
-        $total -= floatval($order->get_discount_total());
+        // Do NOT subtract discounts here - they're already applied to line item totals
+        // The discount_total is just a reference value showing how much was discounted
         
         // Set the final total
         $order->set_total(max(0, $total)); // Ensure total is never negative
@@ -435,8 +710,8 @@ class LazyChat_Order_Controller {
             if (isset($shipping_line['method_title'])) {
                 $shipping_item->set_method_title(sanitize_text_field($shipping_line['method_title']));
             }
-            if (isset($shipping_line['total'])) {
-                $shipping_item->set_total(sanitize_text_field($shipping_line['total']));
+            if (isset($shipping_line['total']) && is_numeric($shipping_line['total'])) {
+                $shipping_item->set_total(wc_format_decimal($shipping_line['total']));
             }
             
             $order->add_item($shipping_item);
@@ -453,8 +728,8 @@ class LazyChat_Order_Controller {
             if (isset($fee_line['name'])) {
                 $fee_item->set_name(sanitize_text_field($fee_line['name']));
             }
-            if (isset($fee_line['total'])) {
-                $fee_item->set_total(sanitize_text_field($fee_line['total']));
+            if (isset($fee_line['total']) && is_numeric($fee_line['total'])) {
+                $fee_item->set_total(wc_format_decimal($fee_line['total']));
             }
             if (isset($fee_line['tax_status'])) {
                 $fee_item->set_tax_status(sanitize_text_field($fee_line['tax_status']));
@@ -466,13 +741,79 @@ class LazyChat_Order_Controller {
     
     /**
      * Add coupon lines to order
+     * 
+     * @return true|WP_Error True on success, WP_Error if any coupon is invalid
      */
     private static function add_coupon_lines($order, $coupon_lines) {
-        foreach ($coupon_lines as $coupon_line) {
-            if (isset($coupon_line['code'])) {
-                $order->apply_coupon(sanitize_text_field($coupon_line['code']));
+        $errors = array();
+        
+        foreach ($coupon_lines as $index => $coupon_line) {
+            if (!isset($coupon_line['code'])) {
+                $errors[] = array(
+                    'coupon_line' => $index + 1,
+                    'error' => 'missing_coupon_code',
+                    'message' => __('Coupon code is required.', 'lazychat')
+                );
+                continue;
+            }
+            
+            $coupon_code = sanitize_text_field($coupon_line['code']);
+            
+            // Check if coupon exists
+            $coupon = new WC_Coupon($coupon_code);
+            
+            if (!$coupon->get_id()) {
+                $errors[] = array(
+                    'coupon_line' => $index + 1,
+                    'coupon_code' => $coupon_code,
+                    'error' => 'coupon_not_found',
+                    'message' => __('Coupon not found.', 'lazychat')
+                );
+                continue;
+            }
+            
+            // Check if coupon is valid
+            $is_valid = $coupon->is_valid();
+            
+            if (is_wp_error($is_valid)) {
+                $errors[] = array(
+                    'coupon_line' => $index + 1,
+                    'coupon_code' => $coupon_code,
+                    'error' => 'coupon_invalid',
+                    'message' => $is_valid->get_error_message(),
+                    'error_code' => $is_valid->get_error_code()
+                );
+                continue;
+            }
+            
+            // Apply the coupon to the order
+            $result = $order->apply_coupon($coupon_code);
+            
+            if (is_wp_error($result)) {
+                $errors[] = array(
+                    'coupon_line' => $index + 1,
+                    'coupon_code' => $coupon_code,
+                    'error' => 'coupon_apply_failed',
+                    'message' => $result->get_error_message(),
+                    'error_code' => $result->get_error_code()
+                );
+                continue;
             }
         }
+        
+        // If there were any errors, return WP_Error to prevent order creation
+        if (!empty($errors)) {
+            return new WP_Error(
+                'coupon_validation_failed',
+                __('Order cannot be created due to coupon issues.', 'lazychat'),
+                array(
+                    'status' => 400,
+                    'errors' => $errors
+                )
+            );
+        }
+        
+        return true;
     }
     
     /**
@@ -481,7 +822,15 @@ class LazyChat_Order_Controller {
     private static function add_meta_data($order, $meta_data) {
         foreach ($meta_data as $meta) {
             if (isset($meta['key']) && isset($meta['value'])) {
-                $order->add_meta_data(sanitize_text_field($meta['key']), sanitize_text_field($meta['value']), true);
+                $key = sanitize_text_field($meta['key']);
+                $value = $meta['value'];
+                
+                // Only sanitize if it's a string, preserve arrays and objects
+                if (is_string($value)) {
+                    $value = sanitize_text_field($value);
+                }
+                
+                $order->add_meta_data($key, $value, true);
             }
         }
     }

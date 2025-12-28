@@ -130,6 +130,23 @@ class LazyChat_REST_API {
             )
         ));
         
+        // Calculate order totals endpoint (without creating order)
+        register_rest_route($this->namespace, '/orders/calculate', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'calculate_order'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'consumer_key' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+                'consumer_secret' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+            )
+        ));
+        
         // List orders endpoint
         register_rest_route($this->namespace, '/orders/list', array(
             'methods' => 'POST',
@@ -653,6 +670,40 @@ class LazyChat_REST_API {
         }
         
         return rest_ensure_response($response_data);
+    }
+    
+    /**
+     * Calculate order totals without creating order
+     * 
+     * @param WP_REST_Request $request Full request data
+     * @return WP_REST_Response|WP_Error Response object on success, WP_Error on failure
+     */
+    public function calculate_order($request) {
+        // Get JSON body
+        $body = $request->get_json_params();
+        
+        if (empty($body)) {
+            return new WP_Error(
+                'rest_invalid_request',
+                __('Invalid request body.', 'lazychat'),
+                array('status' => 400)
+            );
+        }
+        
+        // Use the order controller class to calculate totals
+        $calculated_totals = LazyChat_Order_Controller::calculate_order_totals($body);
+        
+        // Check if calculation failed
+        if (is_wp_error($calculated_totals)) {
+            return $calculated_totals;
+        }
+        
+        // Add plugin version to response
+        if (is_array($calculated_totals)) {
+            $calculated_totals['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
+        }
+        
+        return rest_ensure_response($calculated_totals);
     }
     
     /**
