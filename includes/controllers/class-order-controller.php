@@ -12,6 +12,37 @@ if (!defined('ABSPATH')) {
 class LazyChat_Order_Controller {
     
     /**
+     * Validate and sanitize order status
+     * Returns valid status or defaults to 'pending' if invalid
+     * 
+     * @param string $status The status to validate
+     * @return string Valid order status
+     */
+    private static function validate_order_status($status) {
+        // Sanitize the input
+        $status = sanitize_text_field($status);
+        
+        // Remove 'wc-' prefix if present (WooCommerce adds it internally)
+        $status = str_replace('wc-', '', $status);
+        
+        // Get all valid WooCommerce order statuses
+        $valid_statuses = wc_get_order_statuses();
+        
+        // wc_get_order_statuses() returns statuses with 'wc-' prefix as keys
+        // Example: array('wc-pending' => 'Pending payment', 'wc-processing' => 'Processing', ...)
+        
+        // Check if the status (with wc- prefix) exists in valid statuses
+        $status_key = 'wc-' . $status;
+        
+        if (array_key_exists($status_key, $valid_statuses)) {
+            return $status; // Return without 'wc-' prefix (set_status adds it internally)
+        }
+        
+        // Status is invalid, default to 'pending'
+        return 'pending';
+    }
+    
+    /**
      * Prepare and populate an order with data (shared logic for create and calculate)
      * 
      * @param WC_Order $order Order object to populate
@@ -32,7 +63,9 @@ class LazyChat_Order_Controller {
         
         // Set order status (skip for calculations to prevent stock reduction)
         if (!$for_calculation && isset($data['status'])) {
-            $order->set_status(sanitize_text_field($data['status']));
+            // Validate status and fallback to 'pending' if invalid
+            $validated_status = self::validate_order_status($data['status']);
+            $order->set_status($validated_status);
         }
         
         // Set customer
