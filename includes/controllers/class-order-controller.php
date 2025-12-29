@@ -21,6 +21,15 @@ class LazyChat_Order_Controller {
      * @return true|WP_Error True on success, WP_Error on failure
      */
     private static function prepare_order($order, $data, $create_customer = false, $for_calculation = false) {
+        // Validate line items are provided
+        if (empty($data['line_items']) || !is_array($data['line_items'])) {
+            return new WP_Error(
+                'missing_line_items',
+                __('At least one line item is required.', 'lazychat'),
+                array('status' => 400)
+            );
+        }
+        
         // Set order status (skip for calculations to prevent stock reduction)
         if (!$for_calculation && isset($data['status'])) {
             $order->set_status(sanitize_text_field($data['status']));
@@ -41,12 +50,10 @@ class LazyChat_Order_Controller {
         }
         
         // Add line items
-        $line_items_data = isset($data['line_items']) && is_array($data['line_items']) ? $data['line_items'] : array();
-        if (!empty($line_items_data)) {
-            $line_items_result = self::add_line_items($order, $line_items_data);
-            if (is_wp_error($line_items_result)) {
-                return $line_items_result;
-            }
+        $line_items_data = $data['line_items'];
+        $line_items_result = self::add_line_items($order, $line_items_data);
+        if (is_wp_error($line_items_result)) {
+            return $line_items_result;
         }
         
         // Add shipping, fees, coupons
@@ -167,6 +174,8 @@ class LazyChat_Order_Controller {
             );
         }
         
+
+        
         try {
             $order = wc_create_order();
             
@@ -250,6 +259,8 @@ class LazyChat_Order_Controller {
                 array('status' => 400)
             );
         }
+        
+
         
         $temp_order = null;
         
