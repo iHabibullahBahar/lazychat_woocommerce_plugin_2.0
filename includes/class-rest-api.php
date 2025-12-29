@@ -380,6 +380,91 @@ class LazyChat_REST_API {
             )
         ));
         
+        // Coupon create or update endpoint
+        register_rest_route($this->namespace, '/coupons/create-or-update', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'create_or_update_coupon'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'consumer_key' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+                'consumer_secret' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+            )
+        ));
+        
+        // Coupon list endpoint
+        register_rest_route($this->namespace, '/coupons/list', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'list_coupons'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'page' => array(
+                    'default' => 1,
+                    'sanitize_callback' => 'absint',
+                    'validate_callback' => function($param) {
+                        return is_numeric($param) && $param > 0;
+                    }
+                ),
+                'per_page' => array(
+                    'default' => 10,
+                    'sanitize_callback' => 'absint',
+                    'validate_callback' => function($param) {
+                        return is_numeric($param) && $param > 0 && $param <= 1000;
+                    }
+                ),
+                'status' => array(
+                    'default' => 'all',
+                    'sanitize_callback' => 'sanitize_text_field',
+                    'validate_callback' => function($param) {
+                        return in_array($param, array('all', 'active', 'expired', 'used_up'));
+                    }
+                ),
+                'is_lazychat_coupon' => array(
+                    'default' => false,
+                    'validate_callback' => function($param) {
+                        return is_bool($param) || in_array($param, array('true', 'false', '1', '0', 1, 0), true);
+                    }
+                ),
+                'consumer_key' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+                'consumer_secret' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+            )
+        ));
+        
+        // Coupon delete endpoint
+        register_rest_route($this->namespace, '/coupons/delete', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'delete_coupon_endpoint'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'coupon_id' => array(
+                    'required' => true,
+                    'sanitize_callback' => 'absint',
+                    'validate_callback' => function($param) {
+                        return is_numeric($param) && $param > 0;
+                    }
+                ),
+                'consumer_key' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+                'consumer_secret' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+            )
+        ));
+        
         // Test connection endpoint
         register_rest_route($this->namespace, '/test-connection', array(
             'methods' => 'POST',
@@ -976,4 +1061,100 @@ class LazyChat_REST_API {
             'plugin_version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
         ));
     }
+    
+    /**
+     * Create or update a coupon
+     */
+    public function create_or_update_coupon($request) {
+        $body = $request->get_json_params();
+        
+        if (empty($body)) {
+            return new WP_Error(
+                'rest_invalid_request',
+                __('Invalid request body.', 'lazychat'),
+                array('status' => 400)
+            );
+        }
+        
+        // Use the coupon controller to create or update
+        $result = LazyChat_Coupon_Controller::create_or_update_coupon($body);
+        
+        // Check if operation failed
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        
+        // Add plugin version to response
+        if (is_array($result)) {
+            $result['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
+        }
+        
+        return rest_ensure_response($result);
+    }
+    
+    /**
+     * List coupons with pagination
+     */
+    public function list_coupons($request) {
+        $body = $request->get_json_params();
+        if (empty($body)) {
+            $body = array();
+        }
+        
+        $page = isset($body['page']) ? absint($body['page']) : 1;
+        $per_page = isset($body['per_page']) ? absint($body['per_page']) : 10;
+        $status = isset($body['status']) ? sanitize_text_field($body['status']) : 'all';
+        $is_lazychat_coupon = isset($body['is_lazychat_coupon']) ? filter_var($body['is_lazychat_coupon'], FILTER_VALIDATE_BOOLEAN) : false;
+        
+        // Build query args
+        $args = array(
+            'page' => $page,
+            'per_page' => $per_page,
+            'status' => $status,
+            'is_lazychat_coupon' => $is_lazychat_coupon,
+        );
+        
+        // Get coupons from controller
+        $result = LazyChat_Coupon_Controller::get_coupons($args);
+        
+        // Add plugin version to response
+        if (is_array($result)) {
+            $result['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
+        }
+        
+        return rest_ensure_response($result);
+    }
+    
+    /**
+     * Delete a coupon
+     */
+    public function delete_coupon_endpoint($request) {
+        $body = $request->get_json_params();
+        
+        if (empty($body) || !isset($body['coupon_id'])) {
+            return new WP_Error(
+                'missing_coupon_id',
+                __('Coupon ID is required.', 'lazychat'),
+                array('status' => 400)
+            );
+        }
+        
+        $coupon_id = absint($body['coupon_id']);
+        
+        // Use the coupon controller to delete
+        $result = LazyChat_Coupon_Controller::delete_coupon($coupon_id);
+        
+        // Check if delete failed
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        
+        // Add plugin version to response
+        if (is_array($result)) {
+            $result['plugin_version'] = defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0';
+        }
+        
+        return rest_ensure_response($result);
+    }
 }
+

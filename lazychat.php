@@ -405,7 +405,9 @@ function lazychat_init() {
     // Load required files
     require_once LAZYCHAT_PLUGIN_DIR . 'includes/class-error-logger.php';
     require_once LAZYCHAT_PLUGIN_DIR . 'includes/formatters/class-product-formatter.php';
+    require_once LAZYCHAT_PLUGIN_DIR . 'includes/formatters/class-coupon-formatter.php';
     require_once LAZYCHAT_PLUGIN_DIR . 'includes/controllers/class-product-controller.php';
+    require_once LAZYCHAT_PLUGIN_DIR . 'includes/controllers/class-coupon-controller.php';
     require_once LAZYCHAT_PLUGIN_DIR . 'includes/controllers/class-order-controller.php';
     require_once LAZYCHAT_PLUGIN_DIR . 'includes/controllers/class-customer-controller.php';
     require_once LAZYCHAT_PLUGIN_DIR . 'includes/controllers/class-category-controller.php';
