@@ -182,6 +182,12 @@ class LazyChat_REST_API {
                         return in_array(strtoupper($param), array('ASC', 'DESC'));
                     }
                 ),
+                'lazychat_only' => array(
+                    'default' => false,
+                    'validate_callback' => function($param) {
+                        return is_bool($param) || in_array($param, array('true', 'false', '1', '0', 1, 0), true);
+                    }
+                ),
                 'consumer_key' => array(
                     'default' => '',
                     'sanitize_callback' => 'sanitize_text_field'
@@ -720,6 +726,7 @@ class LazyChat_REST_API {
         $status = isset($body['status']) ? sanitize_text_field($body['status']) : 'any';
         $orderby = isset($body['orderby']) ? sanitize_text_field($body['orderby']) : 'date';
         $order = isset($body['order']) ? sanitize_text_field($body['order']) : 'DESC';
+        $lazychat_only = isset($body['lazychat_only']) ? filter_var($body['lazychat_only'], FILTER_VALIDATE_BOOLEAN) : false;
         
         // Build query args
         $args = array(
@@ -728,6 +735,7 @@ class LazyChat_REST_API {
             'status' => $status,
             'orderby' => $orderby,
             'order' => $order,
+            'lazychat_only' => $lazychat_only,
         );
         
         // Get orders from controller

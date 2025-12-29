@@ -1150,6 +1150,7 @@ class LazyChat_Order_Controller {
             'status' => 'any',
             'orderby' => 'date',
             'order' => 'DESC',
+            'lazychat_only' => false,
         );
         
         $args = wp_parse_args($args, $defaults);
@@ -1166,6 +1167,11 @@ class LazyChat_Order_Controller {
     // Add status filter if not 'any'
     if ($args['status'] !== 'any') {
         $query_args['status'] = sanitize_text_field($args['status']);
+    }
+    
+    // Filter by LazyChat orders only if requested
+    if (!empty($args['lazychat_only']) && $args['lazychat_only'] === true) {
+        $query_args['created_via'] = 'lazychat';
     }
     
     // Get orders with pagination info in one efficient query
