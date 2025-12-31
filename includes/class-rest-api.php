@@ -500,12 +500,40 @@ class LazyChat_REST_API {
             )
         ));
         
-        // Diagnostic endpoint - tests serverless webhook with blocking mode for debugging
-        register_rest_route($this->namespace, '/diagnose-webhook', array(
+        // Manual product webhook endpoint - sends product webhook on demand (single or multiple)
+        register_rest_route($this->namespace, '/send-product-webhook', array(
             'methods' => 'POST',
-            'callback' => array($this, 'diagnose_webhook'),
+            'callback' => array($this, 'send_product_webhook_manual'),
             'permission_callback' => array($this, 'check_permission'),
             'args' => array(
+                'product_id' => array(
+                    'required' => false,
+                    'sanitize_callback' => 'absint',
+                    'validate_callback' => function($param) {
+                        return is_numeric($param) && $param > 0;
+                    }
+                ),
+                'product_ids' => array(
+                    'required' => false,
+                    'validate_callback' => function($param) {
+                        if (!is_array($param)) {
+                            return false;
+                        }
+                        foreach ($param as $id) {
+                            if (!is_numeric($id) || $id <= 0) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
+                ),
+                'event' => array(
+                    'default' => 'update',
+                    'sanitize_callback' => 'sanitize_text_field',
+                    'validate_callback' => function($param) {
+                        return in_array($param, array('create', 'update', 'delete'), true);
+                    }
+                ),
                 'consumer_key' => array(
                     'default' => '',
                     'sanitize_callback' => 'sanitize_text_field'
@@ -1244,94 +1272,97 @@ class LazyChat_REST_API {
     }
     
     /**
-     * Diagnose webhook endpoint - tests serverless webhook with BLOCKING request
-     * This helps debug production issues by showing actual response/errors
+     * Send product webhook manually - allows on-demand webhook sending for any product
+     * Supports both single product_id and array of product_ids
+     * Uses LazyChat_Webhook_Sender for actual webhook sending
      */
-    public function diagnose_webhook($request) {
-        // Collect diagnostic info
-        $diagnostics = array(
-            'timestamp' => current_time('mysql'),
-            'plugin_version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
-            'php_version' => phpversion(),
-            'wordpress_version' => get_bloginfo('version'),
-            'woocommerce_version' => defined('WC_VERSION') ? WC_VERSION : 'N/A',
-        );
+    public function send_product_webhook_manual($request) {
+        $body = $request->get_json_params();
         
-        // Check settings
-        $bearer_token = get_option('lazychat_bearer_token');
-        $shop_id = get_option('lazychat_selected_shop_id', '');
-        $plugin_active = get_option('lazychat_plugin_active');
-        $enable_products = get_option('lazychat_enable_products');
+        // Get event type
+        $event = isset($body['event']) ? sanitize_text_field($body['event']) : $request->get_param('event');
+        if (empty($event)) {
+            $event = 'update';
+        }
         
-        $diagnostics['settings'] = array(
-            'bearer_token_set' => !empty($bearer_token),
-            'bearer_token_preview' => !empty($bearer_token) ? substr($bearer_token, 0, 10) . '...' : 'NOT SET',
-            'shop_id' => $shop_id,
-            'plugin_active' => $plugin_active,
-            'enable_products' => $enable_products,
-        );
-        
-        // Test serverless webhook with BLOCKING request
-        $aws_webhook_url = 'https://serverless.lazychat.io/webhooks/woocommerce';
-        
-        $test_payload = array(
-            'payload' => array(
-                'id' => 999999,
-                'test' => true,
-                'message' => 'Diagnostic test from WordPress',
-                'timestamp' => current_time('mysql')
-            )
-        );
-        
-        $headers = array(
-            'Authorization' => 'Bearer ' . $bearer_token,
-            'Content-Type' => 'application/json',
-            'X-Webhook-Event' => 'diagnostic/test',
-            'X-Woocommerce-Topic' => 'diagnostic/test',
-            'X-Woocommerce-Event-Id' => 'diag_' . uniqid(),
-            'X-Lazychat-Shop-Id' => $shop_id,
-            'X-Plugin-Version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
-        );
-        
-        $args = array(
-            'body' => wp_json_encode($test_payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-            'headers' => $headers,
-            'timeout' => 30,
-            'method' => 'POST',
-            'blocking' => true, // BLOCKING to get actual response
-            'data_format' => 'body'
-        );
-        
-        $diagnostics['request'] = array(
-            'url' => $aws_webhook_url,
-            'headers' => array_merge($headers, array('Authorization' => 'Bearer ' . substr($bearer_token, 0, 10) . '...')),
-            'body' => $test_payload,
-        );
-        
-        // Make the request
-        $response = wp_remote_post($aws_webhook_url, $args);
-        
-        if (is_wp_error($response)) {
-            $diagnostics['response'] = array(
-                'success' => false,
-                'error' => $response->get_error_message(),
-                'error_code' => $response->get_error_code(),
-            );
-        } else {
-            $response_code = wp_remote_retrieve_response_code($response);
-            $response_body = wp_remote_retrieve_body($response);
-            $response_headers = wp_remote_retrieve_headers($response);
-            
-            $diagnostics['response'] = array(
-                'success' => ($response_code >= 200 && $response_code < 300),
-                'http_code' => $response_code,
-                'body' => $response_body,
-                'body_decoded' => json_decode($response_body, true),
-                'headers' => is_object($response_headers) ? $response_headers->getAll() : (array)$response_headers,
+        // Validate event type
+        if (!in_array($event, array('create', 'update', 'delete'), true)) {
+            return new WP_Error(
+                'invalid_event',
+                __('Invalid event type. Must be one of: create, update, delete', 'lazychat'),
+                array('status' => 400)
             );
         }
         
-        return rest_ensure_response($diagnostics);
+        // Check bearer token
+        $bearer_token = get_option('lazychat_bearer_token');
+        if (empty($bearer_token)) {
+            return new WP_Error(
+                'missing_bearer_token',
+                __('Bearer token is not configured.', 'lazychat'),
+                array('status' => 400)
+            );
+        }
+        
+        // Determine product IDs to process
+        $product_ids = array();
+        
+        // Check for product_ids array first
+        if (isset($body['product_ids']) && is_array($body['product_ids'])) {
+            $product_ids = array_map('absint', $body['product_ids']);
+        } 
+        // Fall back to single product_id
+        elseif (isset($body['product_id'])) {
+            $product_ids = array(absint($body['product_id']));
+        } 
+        elseif ($request->get_param('product_id')) {
+            $product_ids = array(absint($request->get_param('product_id')));
+        }
+        
+        // Validate we have at least one product ID
+        if (empty($product_ids)) {
+            return new WP_Error(
+                'missing_product_id',
+                __('Either product_id or product_ids is required.', 'lazychat'),
+                array('status' => 400)
+            );
+        }
+        
+        // Remove duplicates and filter out zeros
+        $product_ids = array_unique(array_filter($product_ids));
+        
+        // Use webhook sender for actual sending
+        $webhook_sender = new LazyChat_Webhook_Sender();
+        
+        // Process each product
+        $results = array();
+        $success_count = 0;
+        $error_count = 0;
+        
+        foreach ($product_ids as $product_id) {
+            $result = $webhook_sender->send_product_webhook_manual($product_id, $event);
+            $results[] = $result;
+            
+            if (isset($result['success']) && $result['success']) {
+                $success_count++;
+            } else {
+                $error_count++;
+            }
+        }
+        
+        // Build response
+        $response_data = array(
+            'timestamp' => current_time('mysql'),
+            'event' => $event,
+            'webhook_event' => 'product/' . $event,
+            'total_products' => count($product_ids),
+            'success_count' => $success_count,
+            'error_count' => $error_count,
+            'results' => $results,
+            'plugin_version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
+        );
+        
+        return rest_ensure_response($response_data);
     }
 }
 

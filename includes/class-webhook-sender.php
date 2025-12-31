@@ -339,14 +339,83 @@ class LazyChat_Webhook_Sender {
         $this->send_aws_webhook($product_data, 'product/delete');
     }
     
-
+    /**
+     * Send product webhook manually - public method for API endpoint
+     * Uses blocking mode to return actual response
+     * 
+     * @param int $product_id The product ID to send webhook for
+     * @param string $event The event type: 'create', 'update', or 'delete'
+     * @return array Result with success status and response details
+     */
+    public function send_product_webhook_manual($product_id, $event = 'update') {
+        // Check if bearer token is set
+        if (empty($this->bearer_token)) {
+            return array(
+                'product_id' => $product_id,
+                'success' => false,
+                'error' => 'Bearer token not configured',
+            );
+        }
+        
+        $webhook_event = 'product/' . $event;
+        
+        // Prepare product data based on event type
+        if ($event === 'delete') {
+            $product_data = array(
+                'id' => $product_id,
+                'timestamp' => current_time('mysql')
+            );
+            $product_name = 'N/A (delete event)';
+        } else {
+            $product_data = LazyChat_Product_Formatter::prepare_product_data($product_id);
+            
+            if (!$product_data) {
+                return array(
+                    'product_id' => $product_id,
+                    'success' => false,
+                    'error' => 'Product not found or could not be loaded',
+                );
+            }
+            $product_name = isset($product_data['name']) ? $product_data['name'] : 'Unknown';
+        }
+        
+        // Use send_aws_webhook with blocking mode and manual trigger flag
+        $result = $this->send_aws_webhook($product_data, $webhook_event, true, true);
+        
+        // Build response
+        $response = array(
+            'product_id' => $product_id,
+            'product_name' => $product_name,
+            'success' => isset($result['success']) ? $result['success'] : false,
+        );
+        
+        if (isset($result['error'])) {
+            $response['error'] = $result['error'];
+        }
+        if (isset($result['http_code'])) {
+            $response['http_code'] = $result['http_code'];
+        }
+        if (isset($result['response'])) {
+            $response['response'] = $result['response'];
+        }
+        
+        return $response;
+    }
     
+
+
 
     
     /**
      * Send webhook to AWS API endpoint
+     * 
+     * @param array $data The data to send in the webhook payload
+     * @param string $event The event type (e.g., 'product/create')
+     * @param bool $blocking Whether to wait for response (default: false for performance)
+     * @param bool $is_manual Whether this is a manual trigger (adds X-Manual-Trigger header)
+     * @return bool|array Returns true/false for non-blocking, or array with response details for blocking
      */
-    private function send_aws_webhook($data, $event) {
+    private function send_aws_webhook($data, $event, $blocking = false, $is_manual = false) {
         // Check if API credentials are set
         
         if (empty($this->bearer_token)) {
@@ -356,7 +425,7 @@ class LazyChat_Webhook_Sender {
                 error_log('LazyChat: ' . $error_msg);
             }
             $this->log('Webhook Error: ' . $error_msg, array('event' => $event));
-            return false;
+            return $blocking ? array('success' => false, 'error' => $error_msg) : false;
         }
         
         $url = $this->aws_webhook_url;
@@ -379,17 +448,22 @@ class LazyChat_Webhook_Sender {
             'Content-Type' => 'application/json',
             'X-Webhook-Event' => $event,
             'X-Woocommerce-Topic' => $event,
-            'X-Woocommerce-Event-Id' => substr(md5(uniqid(wp_rand(), true)), 0, 10),
+            'X-Woocommerce-Event-Id' => $is_manual ? 'manual_' . uniqid() : substr(md5(uniqid(wp_rand(), true)), 0, 10),
             'X-Lazychat-Shop-Id' => $shop_id,
             'X-Plugin-Version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
         );
         
+        // Add manual trigger header if applicable
+        if ($is_manual) {
+            $headers['X-Manual-Trigger'] = 'true';
+        }
+        
         $args = array(
             'body' => $payload,
             'headers' => $headers,
-            'timeout' => 15,
+            'timeout' => $blocking ? 30 : 15,
             'method' => 'POST',
-            'blocking' => false, // Non-blocking request for better performance
+            'blocking' => $blocking,
             'data_format' => 'body' // Send raw body, don't re-encode
         );
         
@@ -406,7 +480,24 @@ class LazyChat_Webhook_Sender {
                 'url' => $url,
                 'error' => $error_msg
             ));
-            return false;
+            return $blocking ? array('success' => false, 'error' => $error_msg) : false;
+        }
+        
+        // For blocking requests, return detailed response
+        if ($blocking) {
+            $response_code = wp_remote_retrieve_response_code($response);
+            $response_body = wp_remote_retrieve_body($response);
+            
+            $this->log($is_manual ? 'Manual webhook sent' : 'Webhook sent', array(
+                'event' => $event,
+                'http_code' => $response_code
+            ));
+            
+            return array(
+                'success' => ($response_code >= 200 && $response_code < 300),
+                'http_code' => $response_code,
+                'response' => json_decode($response_body, true),
+            );
         }
         
         return true;
