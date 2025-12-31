@@ -121,7 +121,23 @@ class LazyChat_Webhook_Sender {
             add_action('woocommerce_new_product', array($this, 'send_product_created'), 10, 1);
             add_action('woocommerce_update_product', array($this, 'send_product_updated'), 10, 1);
             add_action('woocommerce_before_delete_product', array($this, 'send_product_deleted'), 10, 1);
+            // Also hook into trash action - this fires when user clicks "Trash" (not just permanent delete)
+            add_action('wp_trash_post', array($this, 'send_product_trashed'), 10, 1);
         }
+    }
+    
+    /**
+     * Send product deleted webhook when product is trashed
+     * This is triggered when user clicks "Trash" in admin
+     */
+    public function send_product_trashed($post_id) {
+        // Only process WooCommerce products
+        if (get_post_type($post_id) !== 'product') {
+            return;
+        }
+        
+        // Send the delete webhook
+        $this->send_product_deleted($post_id);
     }
     
     /**
@@ -376,12 +392,8 @@ class LazyChat_Webhook_Sender {
             'blocking' => false, // Non-blocking request for better performance
             'data_format' => 'body' // Send raw body, don't re-encode
         );
-
-
         
         $response = wp_remote_post($url, $args);
-        
-
         
         if (is_wp_error($response)) {
             $error_msg = $response->get_error_message();
@@ -396,6 +408,7 @@ class LazyChat_Webhook_Sender {
             ));
             return false;
         }
+        
         return true;
     }
     
