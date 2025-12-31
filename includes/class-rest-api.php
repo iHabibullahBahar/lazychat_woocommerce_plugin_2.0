@@ -499,6 +499,23 @@ class LazyChat_REST_API {
                 ),
             )
         ));
+        
+        // Diagnostic endpoint - tests serverless webhook with blocking mode for debugging
+        register_rest_route($this->namespace, '/diagnose-webhook', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'diagnose_webhook'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'consumer_key' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+                'consumer_secret' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+            )
+        ));
     }
     
     /**
@@ -1224,6 +1241,97 @@ class LazyChat_REST_API {
         }
         
         return rest_ensure_response($result);
+    }
+    
+    /**
+     * Diagnose webhook endpoint - tests serverless webhook with BLOCKING request
+     * This helps debug production issues by showing actual response/errors
+     */
+    public function diagnose_webhook($request) {
+        // Collect diagnostic info
+        $diagnostics = array(
+            'timestamp' => current_time('mysql'),
+            'plugin_version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
+            'php_version' => phpversion(),
+            'wordpress_version' => get_bloginfo('version'),
+            'woocommerce_version' => defined('WC_VERSION') ? WC_VERSION : 'N/A',
+        );
+        
+        // Check settings
+        $bearer_token = get_option('lazychat_bearer_token');
+        $shop_id = get_option('lazychat_selected_shop_id', '');
+        $plugin_active = get_option('lazychat_plugin_active');
+        $enable_products = get_option('lazychat_enable_products');
+        
+        $diagnostics['settings'] = array(
+            'bearer_token_set' => !empty($bearer_token),
+            'bearer_token_preview' => !empty($bearer_token) ? substr($bearer_token, 0, 10) . '...' : 'NOT SET',
+            'shop_id' => $shop_id,
+            'plugin_active' => $plugin_active,
+            'enable_products' => $enable_products,
+        );
+        
+        // Test serverless webhook with BLOCKING request
+        $aws_webhook_url = 'https://serverless.lazychat.io/webhooks/woocommerce';
+        
+        $test_payload = array(
+            'payload' => array(
+                'id' => 999999,
+                'test' => true,
+                'message' => 'Diagnostic test from WordPress',
+                'timestamp' => current_time('mysql')
+            )
+        );
+        
+        $headers = array(
+            'Authorization' => 'Bearer ' . $bearer_token,
+            'Content-Type' => 'application/json',
+            'X-Webhook-Event' => 'diagnostic/test',
+            'X-Woocommerce-Topic' => 'diagnostic/test',
+            'X-Woocommerce-Event-Id' => 'diag_' . uniqid(),
+            'X-Lazychat-Shop-Id' => $shop_id,
+            'X-Plugin-Version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
+        );
+        
+        $args = array(
+            'body' => wp_json_encode($test_payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            'headers' => $headers,
+            'timeout' => 30,
+            'method' => 'POST',
+            'blocking' => true, // BLOCKING to get actual response
+            'data_format' => 'body'
+        );
+        
+        $diagnostics['request'] = array(
+            'url' => $aws_webhook_url,
+            'headers' => array_merge($headers, array('Authorization' => 'Bearer ' . substr($bearer_token, 0, 10) . '...')),
+            'body' => $test_payload,
+        );
+        
+        // Make the request
+        $response = wp_remote_post($aws_webhook_url, $args);
+        
+        if (is_wp_error($response)) {
+            $diagnostics['response'] = array(
+                'success' => false,
+                'error' => $response->get_error_message(),
+                'error_code' => $response->get_error_code(),
+            );
+        } else {
+            $response_code = wp_remote_retrieve_response_code($response);
+            $response_body = wp_remote_retrieve_body($response);
+            $response_headers = wp_remote_retrieve_headers($response);
+            
+            $diagnostics['response'] = array(
+                'success' => ($response_code >= 200 && $response_code < 300),
+                'http_code' => $response_code,
+                'body' => $response_body,
+                'body_decoded' => json_decode($response_body, true),
+                'headers' => is_object($response_headers) ? $response_headers->getAll() : (array)$response_headers,
+            );
+        }
+        
+        return rest_ensure_response($diagnostics);
     }
 }
 
