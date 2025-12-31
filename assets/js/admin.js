@@ -2,7 +2,7 @@ jQuery(document).ready(function($) {
     'use strict';
     
     // Sync cooldown configuration
-    const SYNC_COOLDOWN_MINUTES = 10;
+    const SYNC_COOLDOWN_MINUTES = 5;
     const SYNC_COOLDOWN_DURATION = SYNC_COOLDOWN_MINUTES * 60 * 1000; // milliseconds
     let cooldownInterval = null;
     

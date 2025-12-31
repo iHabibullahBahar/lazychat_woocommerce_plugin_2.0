@@ -93,7 +93,7 @@ class LazyChat_Ajax_Handlers {
             return;
         }
 
-        $delete_all = isset($_POST['delete_all']) ? (int) $_POST['delete_all'] : 0;
+        $delete_all = isset($_POST['delete_all']) ? (int) wp_unslash($_POST['delete_all']) : 0;
         $delete_all = $delete_all === 1 ? 1 : 0;
 
         $endpoint = 'https://app.lazychat.io/api/woocommerce-plugin/disconnect';
@@ -383,7 +383,7 @@ class LazyChat_Ajax_Handlers {
         }
         
         $api_url = 'https://app.lazychat.io/api/woocommerce-plugin';
-        $bearer_token = isset($_POST['bearer_token']) ? sanitize_text_field($_POST['bearer_token']) : '';
+        $bearer_token = isset($_POST['bearer_token']) ? sanitize_text_field(wp_unslash($_POST['bearer_token'])) : '';
         
         if (empty($bearer_token)) {
             wp_send_json_error(array('message' => __('Bearer Token is required.', 'lazychat')));
@@ -592,7 +592,7 @@ class LazyChat_Ajax_Handlers {
         }
         
         $bearer_token = get_option('lazychat_bearer_token');
-        $enabled = isset($_POST['enabled']) ? filter_var($_POST['enabled'], FILTER_VALIDATE_BOOLEAN) : false;
+        $enabled = isset($_POST['enabled']) ? filter_var(wp_unslash($_POST['enabled']), FILTER_VALIDATE_BOOLEAN) : false;
         
         if (empty($bearer_token)) {
             wp_send_json_error(array(
