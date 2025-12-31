@@ -482,6 +482,23 @@ class LazyChat_REST_API {
                 ),
             )
         ));
+        
+        // Test webhook endpoint - sends a test webhook to verify webhook functionality
+        register_rest_route($this->namespace, '/test-webhook', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'test_webhook'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'consumer_key' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+                'consumer_secret' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+            )
+        ));
     }
     
     /**
@@ -1061,6 +1078,57 @@ class LazyChat_REST_API {
             'woocommerce_version' => defined('WC_VERSION') ? WC_VERSION : 'Not installed',
             'plugin_version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
         ));
+    }
+    
+    /**
+     * Test webhook endpoint - sends a test webhook to verify webhook functionality
+     */
+    public function test_webhook($request) {
+        // Get request body
+        $body = $request->get_json_params();
+        
+        // Get request_id from request (required for tracking)
+        $request_id = isset($body['request_id']) ? sanitize_text_field($body['request_id']) : null;
+        
+        if (empty($request_id)) {
+            return new WP_Error(
+                'missing_request_id',
+                __('A unique request_id is required. Please provide a "request_id" parameter in the request body.', 'lazychat'),
+                array('status' => 400)
+            );
+        }
+        
+        // Get the webhook sender instance
+        $webhook_sender = new LazyChat_Webhook_Sender();
+        
+        // Prepare test data with the request_id
+        $test_data = array(
+            'request_id' => $request_id,
+            'test_id' => uniqid('test_'),
+            'message' => 'This is a test webhook from LazyChat plugin',
+            'timestamp' => current_time('mysql'),
+            'site_url' => get_site_url(),
+            'plugin_version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
+        );
+        
+        // Send test event using the send_event method
+        $result = $webhook_sender->send_event('test.webhook', $test_data);
+        
+        if ($result) {
+            return rest_ensure_response(array(
+                'success' => true,
+                'message' => 'Test webhook sent successfully',
+                'event_type' => 'test.webhook',
+                'request_id' => $request_id,
+                'test_data' => $test_data,
+            ));
+        } else {
+            return new WP_Error(
+                'webhook_failed',
+                __('Failed to send test webhook. Please check your bearer token configuration.', 'lazychat'),
+                array('status' => 500)
+            );
+        }
     }
     
     /**
