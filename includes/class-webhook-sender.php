@@ -106,7 +106,8 @@ class LazyChat_Webhook_Sender {
         }
         
         // Also log to error_log for backward compatibility during debugging
-        if (defined('WP_DEBUG') && WP_DEBUG) {
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging when WP_DEBUG is enabled
             error_log('[LazyChat] ' . $full_message);
         }
     }
@@ -334,7 +335,10 @@ class LazyChat_Webhook_Sender {
         
         if (empty($this->bearer_token)) {
             $error_msg = 'Bearer Token not configured';
-            error_log('LazyChat: ' . $error_msg);
+            if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging when WP_DEBUG is enabled
+                error_log('LazyChat: ' . $error_msg);
+            }
             $this->log('Webhook Error: ' . $error_msg, array('event' => $event));
             return false;
         }
@@ -359,7 +363,7 @@ class LazyChat_Webhook_Sender {
             'Content-Type' => 'application/json',
             'X-Webhook-Event' => $event,
             'X-Woocommerce-Topic' => $event,
-            'X-Woocommerce-Event-Id' => substr(md5(uniqid(rand(), true)), 0, 10),
+            'X-Woocommerce-Event-Id' => substr(md5(uniqid(wp_rand(), true)), 0, 10),
             'X-Lazychat-Shop-Id' => $shop_id,
             'X-Plugin-Version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
         );
@@ -381,7 +385,10 @@ class LazyChat_Webhook_Sender {
         
         if (is_wp_error($response)) {
             $error_msg = $response->get_error_message();
-            error_log('LazyChat AWS Webhook Error (' . $event . '): ' . $error_msg);
+            if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging when WP_DEBUG is enabled
+                error_log('LazyChat AWS Webhook Error (' . $event . '): ' . $error_msg);
+            }
             $this->log('AWS Webhook Request Failed', array(
                 'event' => $event,
                 'url' => $url,

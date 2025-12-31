@@ -188,7 +188,7 @@ class LazyChat_Admin {
         $needs_login  = empty($bearer_token);
         
         // Show connection failed notice only if not logged in
-        if ($needs_login && isset($_GET['connection_failed']) && $_GET['connection_failed'] === '1') {
+        if ($needs_login && isset($_GET['connection_failed']) && sanitize_text_field(wp_unslash($_GET['connection_failed'])) === '1') {
             echo '<div class="notice notice-error is-dismissible">';
             echo '<p><strong>' . esc_html__('Connection Failed', 'lazychat') . '</strong></p>';
             echo '<p>' . esc_html__('Unable to connect to LazyChat. You have been logged out. Please login again.', 'lazychat') . '</p>';

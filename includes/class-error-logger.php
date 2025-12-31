@@ -26,8 +26,11 @@ class LazyChat_Error_Logger {
             $full_message .= ' | Data: ' . wp_json_encode($data);
         }
         
-        // Log to error_log
-        error_log($full_message);
+        // Log to error_log only when WP_DEBUG is enabled
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+            error_log($full_message);
+        }
         
         // Extract error code from data if available
         $error_code = null;
@@ -93,6 +96,7 @@ class LazyChat_Error_Logger {
         
         // Log API failure only if blocking (for debugging)
         if (is_wp_error($response) && defined('WP_DEBUG') && WP_DEBUG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
             error_log('[LazyChat] Failed to send error log to API: ' . $response->get_error_message());
         }
     }

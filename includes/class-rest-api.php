@@ -29,6 +29,7 @@ class LazyChat_REST_API {
     public function register_routes() {
         // Log that routes are being registered
         if (defined('WP_DEBUG') && WP_DEBUG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
             error_log('[LazyChat] Registering REST API routes for namespace: ' . $this->namespace);
         }
         

@@ -131,7 +131,10 @@ class LazyChat_Ajax_Handlers {
         $response_body = wp_remote_retrieve_body($response);
         $data = json_decode($response_body, true);
 
-        error_log('[LazyChat] Disconnect HTTP ' . $status_code . ' response: ' . substr($response_body, 0, 500));
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+            error_log('[LazyChat] Disconnect HTTP ' . $status_code . ' response: ' . substr($response_body, 0, 500));
+        }
 
         if ($status_code >= 200 && $status_code < 300) {
             $message = $delete_all 
@@ -521,7 +524,10 @@ class LazyChat_Ajax_Handlers {
         $data = json_decode($response_body, true);
         
         // Log for debugging
-        error_log('LazyChat Check Connection Response: Code=' . $response_code . ', Body=' . $response_body);
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+            error_log('LazyChat Check Connection Response: Code=' . $response_code . ', Body=' . $response_body);
+        }
         
         if ($response_code === 200 && isset($data['status']) && $data['status'] === 'success') {
             $is_connected = isset($data['connected']) && $data['connected'] === true;
@@ -617,7 +623,10 @@ class LazyChat_Ajax_Handlers {
         
         if (is_wp_error($response)) {
             $error_message = $response->get_error_message();
-            error_log('[LazyChat] Toggle Plugin Failed: ' . $error_message);
+            if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+                error_log('[LazyChat] Toggle Plugin Failed: ' . $error_message);
+            }
             
             wp_send_json_error(array(
                 'message' => sprintf(
@@ -634,7 +643,10 @@ class LazyChat_Ajax_Handlers {
         $data = json_decode($response_body, true);
         
         // Log for debugging
-        error_log('[LazyChat] Toggle Plugin Response: Code=' . $response_code . ', Body=' . $response_body);
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+            error_log('[LazyChat] Toggle Plugin Response: Code=' . $response_code . ', Body=' . $response_body);
+        }
         
         if ($response_code === 200 && isset($data['status']) && $data['status'] === 'success') {
             // Save the plugin active status to database
@@ -828,9 +840,12 @@ class LazyChat_Ajax_Handlers {
         $response_body = wp_remote_retrieve_body($response);
         $data = json_decode($response_body, true);
 
-        error_log('[LazyChat] Sync Products HTTP ' . $status_code . ' response: ' . $response_body);
-        error_log('[LazyChat] Sync Products Shop ID: ' . $shop_id . ', Bearer Token: ' . substr($bearer_token, 0, 10) . '...');
-        error_log('[LazyChat] Sync Products Decoded Data: ' . print_r($data, true));
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log,WordPress.PHP.DevelopmentFunctions.error_log_print_r -- Intentional debug logging
+            error_log('[LazyChat] Sync Products HTTP ' . $status_code . ' response: ' . $response_body);
+            error_log('[LazyChat] Sync Products Shop ID: ' . $shop_id . ', Bearer Token: ' . substr($bearer_token, 0, 10) . '...');
+            error_log('[LazyChat] Sync Products Decoded Data: ' . print_r($data, true));
+        }
 
         // Check if HTTP status is successful (200-299)
         if ($status_code >= 200 && $status_code < 300) {
@@ -875,14 +890,20 @@ class LazyChat_Ajax_Handlers {
             }
 
             if ($is_success) {
-                error_log('[LazyChat] Sync Products: Success! Message: ' . $message);
+                if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+                    error_log('[LazyChat] Sync Products: Success! Message: ' . $message);
+                }
                 wp_send_json_success(array(
                     'message' => $message,
                     'data' => isset($data['data']) ? $data['data'] : $data,
                 ));
             } else {
                 // Should not reach here, but handle it anyway
-                error_log('[LazyChat] Sync Products: HTTP 200 but could not determine success');
+                if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                    // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+                    error_log('[LazyChat] Sync Products: HTTP 200 but could not determine success');
+                }
                 wp_send_json_success(array(
                     'message' => __('✅ Product sync request sent.', 'lazychat'),
                     'data' => $data,
@@ -938,7 +959,10 @@ class LazyChat_Ajax_Handlers {
         // Use LazyChat base URL for progress endpoint
         $endpoint = 'https://app.lazychat.io/api/woocommerce-plugin/products/sync-progress';
 
-        error_log('[LazyChat] Fetching sync progress from: ' . $endpoint . ' with Bearer Token: ' . substr($bearer_token, 0, 10) . '...');
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+            error_log('[LazyChat] Fetching sync progress from: ' . $endpoint . ' with Bearer Token: ' . substr($bearer_token, 0, 10) . '...');
+        }
 
         $response = wp_remote_post($endpoint, array(
             'method' => 'POST',
@@ -1036,7 +1060,10 @@ class LazyChat_Ajax_Handlers {
         ));
 
         if (is_wp_error($response)) {
-            error_log('[LazyChat] Store registration failed: ' . $response->get_error_message());
+            if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+                error_log('[LazyChat] Store registration failed: ' . $response->get_error_message());
+            }
             return array(
                 'success' => false,
                 'message' => sprintf(
@@ -1051,7 +1078,10 @@ class LazyChat_Ajax_Handlers {
         $response_body = wp_remote_retrieve_body($response);
         $data = json_decode($response_body, true);
 
-        error_log('[LazyChat] Store registration HTTP ' . $status_code . ' response: ' . substr($response_body, 0, 500));
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+            error_log('[LazyChat] Store registration HTTP ' . $status_code . ' response: ' . substr($response_body, 0, 500));
+        }
 
         if ($status_code >= 200 && $status_code < 300 && isset($data['status']) && $data['status'] === 'success') {
             return array(
@@ -1092,7 +1122,8 @@ class LazyChat_Ajax_Handlers {
 
         // Delete all existing LazyChat API keys before creating a new one
         $deleted_count = $this->delete_existing_lazychat_keys();
-        if ($deleted_count > 0) {
+        if ($deleted_count > 0 && defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
             error_log('[LazyChat] Deleted ' . $deleted_count . ' existing LazyChat API key(s) before creating new one.');
         }
 
@@ -1138,7 +1169,10 @@ class LazyChat_Ajax_Handlers {
         update_option('lazychat_wc_consumer_secret', $consumer_secret);
         update_option('lazychat_wc_last_access', $last_access);
 
-        error_log('[LazyChat] Created new WooCommerce API key: ' . $description);
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+            error_log('[LazyChat] Created new WooCommerce API key: ' . $description);
+        }
 
         return array(
             'consumer_key' => $consumer_key,

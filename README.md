@@ -4,7 +4,7 @@ Tags: woocommerce, customer support, ai, chatbot, webhook
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.3.39
+Stable tag: 1.4.10
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,12 @@ Yes, the plugin fully supports WooCommerce product variations and attributes.
 
 == Changelog ==
 
+= 1.4.10 =
+* Fixed rand() to use wp_rand() for WordPress coding standards
+* Wrapped error_log() calls with WP_DEBUG checks
+* Added translator comments for i18n compliance
+* Code cleanup and optimization
+
 = 1.3.39 =
 * Fixed nonce sanitization for WordPress.org compliance
 * Removed external file dependencies
@@ -68,5 +74,5 @@ Yes, the plugin fully supports WooCommerce product variations and attributes.
 
 == Upgrade Notice ==
 
-= 1.3.39 =
-Security improvements and WordPress.org compliance updates.
+= 1.4.10 =
+WordPress coding standards improvements and security enhancements.

@@ -156,7 +156,8 @@ function lazychat_cleanup_old_logs() {
     );
     
     // Log the cleanup action if WP_DEBUG is enabled
-    if (defined('WP_DEBUG') && WP_DEBUG && $deleted > 0) {
+    if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG && $deleted > 0) {
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
         error_log(sprintf('[LazyChat] Automatic log cleanup: Deleted %d logs older than 15 days', $deleted));
     }
     
@@ -341,7 +342,10 @@ function lazychat_send_event_notification($event_type, $event_data = array()) {
     // Check if bearer token is set
     $bearer_token = get_option('lazychat_bearer_token');
     if (empty($bearer_token)) {
-        error_log('[LazyChat] Cannot send event notification - Bearer token not configured');
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+            error_log('[LazyChat] Cannot send event notification - Bearer token not configured');
+        }
         return false;
     }
     
@@ -387,13 +391,19 @@ function lazychat_send_event_notification($event_type, $event_data = array()) {
     
     // Debug logging
     if (is_wp_error($response)) {
-        error_log('[LazyChat] Event notification failed (' . $event_type . '): ' . $response->get_error_message());
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+            error_log('[LazyChat] Event notification failed (' . $event_type . '): ' . $response->get_error_message());
+        }
         return false;
     }
     
     $response_code = wp_remote_retrieve_response_code($response);
     $response_body = wp_remote_retrieve_body($response);
-    error_log('[LazyChat] Event sent (' . $event_type . ') - Response Code: ' . $response_code . ' - Body: ' . $response_body);
+    if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+        error_log('[LazyChat] Event sent (' . $event_type . ') - Response Code: ' . $response_code . ' - Body: ' . $response_body);
+    }
     
     return true;
 }

@@ -54,6 +54,7 @@ class LazyChat_Coupon_Controller {
                 if ($existing_coupon_id) {
                     return new WP_Error(
                         'coupon_already_exists',
+                        /* translators: %s: coupon code */
                         sprintf(__('Coupon with code "%s" already exists.', 'lazychat'), $data['code']),
                         array('status' => 409, 'existing_coupon_id' => $existing_coupon_id)
                     );
@@ -232,7 +233,9 @@ class LazyChat_Coupon_Controller {
             return array(
                 'success' => true,
                 'message' => $is_update 
+                    /* translators: %d: coupon ID */
                     ? sprintf(__('Coupon updated successfully. Coupon ID: %d', 'lazychat'), $saved_id)
+                    /* translators: %d: coupon ID */
                     : sprintf(__('Coupon created successfully. Coupon ID: %d', 'lazychat'), $saved_id),
                 'coupon' => $coupon_data
             );
@@ -383,6 +386,7 @@ class LazyChat_Coupon_Controller {
         
         return array(
             'success' => true,
+            /* translators: %s: coupon code */
             'message' => sprintf(__('Coupon "%s" deleted successfully.', 'lazychat'), $coupon_code),
             'coupon_id' => $coupon_id,
             'coupon_code' => $coupon_code

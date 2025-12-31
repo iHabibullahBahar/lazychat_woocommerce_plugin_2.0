@@ -81,5 +81,8 @@ function lazychat_uninstall_cleanup() {
 lazychat_uninstall_cleanup();
 
 // Log uninstallation (optional, for debugging)
-error_log('LazyChat plugin uninstalled and all data removed.');
+if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+    // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+    error_log('LazyChat plugin uninstalled and all data removed.');
+}
 

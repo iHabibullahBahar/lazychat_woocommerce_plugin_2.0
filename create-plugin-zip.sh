@@ -48,6 +48,13 @@ sed -i '' "s/Version: $CURRENT_VERSION/Version: $NEW_VERSION/g" "$PLUGIN_DIR/$MA
 # Update LAZYCHAT_VERSION constant
 sed -i '' "s/define('LAZYCHAT_VERSION', '$CURRENT_VERSION')/define('LAZYCHAT_VERSION', '$NEW_VERSION')/g" "$PLUGIN_DIR/$MAIN_FILE"
 
+# Update Stable tag in README.md
+README_FILE="README.md"
+if [ -f "$PLUGIN_DIR/$README_FILE" ]; then
+    echo "✏️  Updating Stable tag in $README_FILE..."
+    sed -i '' "s/Stable tag: $CURRENT_VERSION/Stable tag: $NEW_VERSION/g" "$PLUGIN_DIR/$README_FILE"
+fi
+
 echo -e "${GREEN}✅ Version updated successfully!${NC}"
 echo ""
 
@@ -77,9 +84,32 @@ mkdir -p "$DESTINATION_DIR"
 TEMP_DIR=$(mktemp -d)
 PLUGIN_TEMP_DIR="$TEMP_DIR/$PLUGIN_NAME"
 
-# Copy plugin files to temp directory, excluding .md files and .git
+# Copy plugin files to temp directory, excluding development files
+# WordPress.org requires: README.md (or readme.txt), main plugin file, includes, assets
+# Exclude: .git, .gitignore, shell scripts, docs/, tests/, node_modules/, vendor/
 echo "📦 Creating ZIP file..."
-rsync -av --exclude='*.md' --exclude='.git' --exclude='.gitignore' --exclude='*.sh' --exclude='.DS_Store' "$PLUGIN_DIR/" "$PLUGIN_TEMP_DIR/" > /dev/null 2>&1
+rsync -av \
+    --exclude='.git' \
+    --exclude='.gitignore' \
+    --exclude='*.sh' \
+    --exclude='.DS_Store' \
+    --exclude='docs/' \
+    --exclude='tests/' \
+    --exclude='node_modules/' \
+    --exclude='vendor/' \
+    --exclude='.phpcs.xml' \
+    --exclude='phpunit.xml' \
+    --exclude='composer.json' \
+    --exclude='composer.lock' \
+    --exclude='package.json' \
+    --exclude='package-lock.json' \
+    --exclude='.editorconfig' \
+    --exclude='.eslintrc' \
+    --exclude='.stylelintrc' \
+    --exclude='Gruntfile.js' \
+    --exclude='gulpfile.js' \
+    --exclude='webpack.config.js' \
+    "$PLUGIN_DIR/" "$PLUGIN_TEMP_DIR/" > /dev/null 2>&1
 
 # Create ZIP file
 ZIP_FILE="$DESTINATION_DIR/$PLUGIN_NAME-$NEW_VERSION.zip"
