@@ -93,7 +93,7 @@ class LazyChat_Ajax_Handlers {
             return;
         }
 
-        $delete_all = isset($_POST['delete_all']) ? (int) wp_unslash($_POST['delete_all']) : 0;
+        $delete_all = isset($_POST['delete_all']) ? (int) sanitize_text_field(wp_unslash($_POST['delete_all'])) : 0;
         $delete_all = $delete_all === 1 ? 1 : 0;
 
         $endpoint = 'https://app.lazychat.io/api/woocommerce-plugin/disconnect';
@@ -754,7 +754,7 @@ class LazyChat_Ajax_Handlers {
         global $wpdb;
 
         // Search for keys with "LazyChat" or "Lazychat" in the description (case-insensitive)
-        // Note: Table name is safe as it uses $wpdb->prefix for WooCommerce core table
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Required for WooCommerce API keys table
         $deleted_count = $wpdb->query(
             $wpdb->prepare(
                 "DELETE FROM `{$wpdb->prefix}woocommerce_api_keys` WHERE description LIKE %s OR description LIKE %s",
@@ -843,7 +843,9 @@ class LazyChat_Ajax_Handlers {
         if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
             // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log,WordPress.PHP.DevelopmentFunctions.error_log_print_r -- Intentional debug logging
             error_log('[LazyChat] Sync Products HTTP ' . $status_code . ' response: ' . $response_body);
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
             error_log('[LazyChat] Sync Products Shop ID: ' . $shop_id . ', Bearer Token: ' . substr($bearer_token, 0, 10) . '...');
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log,WordPress.PHP.DevelopmentFunctions.error_log_print_r -- Intentional debug logging
             error_log('[LazyChat] Sync Products Decoded Data: ' . print_r($data, true));
         }
 
@@ -1115,6 +1117,7 @@ class LazyChat_Ajax_Handlers {
         global $wpdb;
         $table_name = $wpdb->prefix . 'woocommerce_api_keys';
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Required to check WooCommerce table existence
         $table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name));
         if ($table_exists !== $table_name) {
             return new WP_Error('lazychat_wc_table_missing', __('WooCommerce API keys table was not found. Please verify your WooCommerce installation.', 'lazychat'));
@@ -1159,6 +1162,7 @@ class LazyChat_Ajax_Handlers {
 
         $formats = array('%d', '%s', '%s', '%s', '%s', '%s', '%s');
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Required for WooCommerce API keys table insert
         $inserted = $wpdb->insert($table_name, $data, $formats);
 
         if (false === $inserted || 0 === (int) $wpdb->insert_id) {

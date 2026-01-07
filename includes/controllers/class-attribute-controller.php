@@ -31,11 +31,14 @@ class LazyChat_Attribute_Controller {
         global $wpdb;
         
         // Get total count of attributes
+        // Note: Direct DB query is necessary - no WooCommerce API for attribute taxonomies table
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
         $total_attributes = $wpdb->get_var(
             "SELECT COUNT(*) FROM {$wpdb->prefix}woocommerce_attribute_taxonomies"
         );
         
         // Get paginated attributes
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
         $attributes = $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT * FROM {$wpdb->prefix}woocommerce_attribute_taxonomies 
@@ -109,6 +112,7 @@ class LazyChat_Attribute_Controller {
         global $wpdb;
         
         // Get attribute
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
         $attribute = $wpdb->get_row(
             $wpdb->prepare(
                 "SELECT * FROM {$wpdb->prefix}woocommerce_attribute_taxonomies 

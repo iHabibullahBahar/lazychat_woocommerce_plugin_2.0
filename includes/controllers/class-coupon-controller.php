@@ -281,6 +281,7 @@ class LazyChat_Coupon_Controller {
         
         // Filter by LazyChat coupons only if requested
         if ($args['is_lazychat_coupon']) {
+            // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Required for filtering by creation source
             $query_args['meta_query'] = array(
                 array(
                     'key' => '_created_via',

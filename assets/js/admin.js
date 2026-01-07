@@ -189,11 +189,6 @@ jQuery(document).ready(function($) {
             testWebhook('product');
         });
         
-        // Order webhook test
-        $('#test_order_webhook').on('click', function() {
-            testWebhook('order');
-        });
-        
         // Handle plugin activation toggle
         $('#lazychat_plugin_active').on('change', function(e) {
             handleActivationToggle(e, $(this));

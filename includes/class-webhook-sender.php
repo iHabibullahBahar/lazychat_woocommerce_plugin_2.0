@@ -81,6 +81,7 @@ class LazyChat_Webhook_Sender {
         
         // Insert into database
         $table_name = $wpdb->prefix . 'lazychat_logs';
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Custom logging table
         $wpdb->insert(
             $table_name,
             array(

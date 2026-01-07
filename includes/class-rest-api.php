@@ -559,17 +559,19 @@ class LazyChat_REST_API {
         
         // Check Apache-specific authorization header
         if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
-            return $_SERVER['HTTP_AUTHORIZATION'];
+            return sanitize_text_field(wp_unslash($_SERVER['HTTP_AUTHORIZATION']));
         }
         
         // Check redirect header (some Apache configs)
         if (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
-            return $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+            return sanitize_text_field(wp_unslash($_SERVER['REDIRECT_HTTP_AUTHORIZATION']));
         }
         
         // Check PHP_AUTH_USER and PHP_AUTH_PW for Basic Auth
         if (isset($_SERVER['PHP_AUTH_USER'])) {
-            return 'Basic ' . base64_encode($_SERVER['PHP_AUTH_USER'] . ':' . $_SERVER['PHP_AUTH_PW']);
+            $auth_user = sanitize_text_field(wp_unslash($_SERVER['PHP_AUTH_USER']));
+            $auth_pass = isset($_SERVER['PHP_AUTH_PW']) ? sanitize_text_field(wp_unslash($_SERVER['PHP_AUTH_PW'])) : '';
+            return 'Basic ' . base64_encode($auth_user . ':' . $auth_pass);
         }
         
         // Check for Authorization in getallheaders() if available
@@ -678,6 +680,7 @@ class LazyChat_REST_API {
         global $wpdb;
         
         // Get WooCommerce API keys from database
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Required for WooCommerce API key authentication
         $key = $wpdb->get_row(
             $wpdb->prepare(
                 "SELECT key_id, user_id, permissions, consumer_key, consumer_secret, nonces 

@@ -32,15 +32,20 @@ function lazychat_uninstall_cleanup() {
     delete_option('lazychat_wc_last_access');
     
     // Drop logs table
-    // Note: Table name is safe as it uses $wpdb->prefix
+    // Note: Direct DB query is necessary - no WP API for DROP TABLE
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange
     $wpdb->query("DROP TABLE IF EXISTS `{$wpdb->prefix}lazychat_logs`");
     
     // Delete all LazyChat transients (product tracking cache)
+    // Note: Direct DB query is necessary for bulk transient deletion by pattern
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_lazychat_product_tracked_%'");
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_lazychat_product_tracked_%'");
     
     // For multisite installations, delete options and tables for all sites
     if (is_multisite()) {
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
         $blog_ids = $wpdb->get_col("SELECT blog_id FROM $wpdb->blogs");
         $original_blog_id = get_current_blog_id();
         
@@ -62,11 +67,13 @@ function lazychat_uninstall_cleanup() {
             delete_option('lazychat_wc_last_access');
             
             // Drop logs table for this site
-            // Note: Table name is safe as it uses $wpdb->prefix
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange
             $wpdb->query("DROP TABLE IF EXISTS `{$wpdb->prefix}lazychat_logs`");
             
             // Delete all LazyChat transients for this site
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
             $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_lazychat_product_tracked_%'");
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
             $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_lazychat_product_tracked_%'");
         }
         

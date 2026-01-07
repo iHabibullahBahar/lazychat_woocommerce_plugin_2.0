@@ -188,6 +188,7 @@ class LazyChat_Admin {
         $needs_login  = empty($bearer_token);
         
         // Show connection failed notice only if not logged in
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading URL parameter for display purposes only
         if ($needs_login && isset($_GET['connection_failed']) && sanitize_text_field(wp_unslash($_GET['connection_failed'])) === '1') {
             echo '<div class="notice notice-error is-dismissible">';
             echo '<p><strong>' . esc_html__('Connection Failed', 'lazychat') . '</strong></p>';

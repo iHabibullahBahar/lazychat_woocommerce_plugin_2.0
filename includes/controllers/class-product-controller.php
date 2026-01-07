@@ -104,6 +104,7 @@ class LazyChat_Product_Controller {
         
         // Add product type filter if specified
         if (!empty($type)) {
+            // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query -- Required for filtering by product type
             $query_args['tax_query'] = array(
                 array(
                     'taxonomy' => 'product_type',

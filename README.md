@@ -8,7 +8,7 @@ Stable tag: 1.4.15
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Connect your WooCommerce store with LazyChat's AI-powered customer support platform. Automatically sync products and orders via webhooks.
+Connect your WooCommerce store with LazyChat's AI-powered customer support platform. Automatically sync products via webhooks.
 
 == Description ==
 
@@ -17,7 +17,7 @@ LazyChat integrates your WooCommerce store with LazyChat's AI-powered customer s
 **Features:**
 
 * Automatic product synchronization with LazyChat
-* Real-time order updates via webhooks
+* Order creation and management via REST API
 * Customer data integration
 * Secure API connection with bearer token authentication
 * Category and attribute management
@@ -56,6 +56,43 @@ You can find your Shop ID and Bearer Token in your LazyChat account dashboard un
 = Does this plugin work with WooCommerce product variations? =
 
 Yes, the plugin fully supports WooCommerce product variations and attributes.
+
+== External services ==
+
+This plugin connects to LazyChat's external servers to provide AI-powered customer support functionality for your WooCommerce store.
+
+= LazyChat API =
+
+**Service URL:** https://app.lazychat.io
+
+This plugin sends the following data to LazyChat servers:
+
+* **Product information** (names, prices, images, descriptions, SKUs, stock status) - sent when products are created, updated, or deleted via webhooks
+* **Store credentials** - sent during authentication to establish secure connection
+* **Site information** (WordPress version, WooCommerce version, plugin version) - sent for compatibility and debugging purposes
+
+**When data is transmitted:**
+
+* When you login and connect your WooCommerce store
+* When product webhooks are triggered (automatic sync on create/update/delete)
+* When you manually sync products from the settings page
+* When the plugin settings page is loaded (connection verification)
+* When the plugin status is toggled on/off
+
+= LazyChat Serverless Webhooks =
+
+**Service URL:** https://serverless.lazychat.io
+
+Used for real-time webhook delivery for product updates. Receives the same product data as described above.
+
+= Service Provider =
+
+**LazyChat** - AI-powered customer support platform
+
+* [Terms of Service](https://app.lazychat.io/legal/terms-and-conditions)
+* [Privacy Policy](https://app.lazychat.io/legal/privacy-policy)
+
+All data transmission uses secure HTTPS connections with bearer token authentication.
 
 == Changelog ==
 

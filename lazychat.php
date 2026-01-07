@@ -148,6 +148,7 @@ function lazychat_cleanup_old_logs() {
     
     // Delete logs older than 15 days
     $table_name = $wpdb->prefix . 'lazychat_logs';
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Custom table cleanup
     $deleted = $wpdb->query(
         $wpdb->prepare(
             "DELETE FROM `{$wpdb->prefix}lazychat_logs` WHERE timestamp < %s",
@@ -249,19 +250,48 @@ function lazychat_rest_api_error_notice() {
             <a href="<?php echo esc_url($settings_url); ?>"><?php esc_html_e('Go to LazyChat Settings to fix this issue.', 'lazychat'); ?></a>
         </p>
     </div>
-    <script>
-    jQuery(document).ready(function($) {
-        $('.lazychat-rest-notice').on('click', '.notice-dismiss', function() {
-            $.post(ajaxurl, {
-                action: 'lazychat_dismiss_rest_notice',
-                nonce: '<?php echo esc_js(wp_create_nonce('lazychat_dismiss_rest_notice')); ?>'
-            });
-        });
-    });
-    </script>
     <?php
 }
 add_action('admin_notices', 'lazychat_rest_api_error_notice');
+
+/**
+ * Enqueue inline script for REST API notice dismissal
+ * Uses wp_add_inline_script() as required by WordPress plugin guidelines
+ */
+function lazychat_enqueue_notice_script() {
+    // Only enqueue if the notice will be shown
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+    
+    if (get_option('lazychat_rest_api_notice_dismissed')) {
+        return;
+    }
+    
+    if (lazychat_check_rest_api()) {
+        return;
+    }
+    
+    // Register a minimal script handle to attach the inline script to
+    wp_register_script('lazychat-notice', '', array('jquery'), LAZYCHAT_VERSION, true);
+    wp_enqueue_script('lazychat-notice');
+    
+    // Add the inline script for notice dismissal
+    $inline_script = sprintf(
+        'jQuery(document).ready(function($) {
+            $(".lazychat-rest-notice").on("click", ".notice-dismiss", function() {
+                $.post(ajaxurl, {
+                    action: "lazychat_dismiss_rest_notice",
+                    nonce: "%s"
+                });
+            });
+        });',
+        esc_js(wp_create_nonce('lazychat_dismiss_rest_notice'))
+    );
+    
+    wp_add_inline_script('lazychat-notice', $inline_script);
+}
+add_action('admin_enqueue_scripts', 'lazychat_enqueue_notice_script');
 
 /**
  * Handle REST API notice dismissal via AJAX
@@ -295,6 +325,7 @@ add_action('update_option_permalink_structure', function() {
  */
 add_action('wp_loaded', function() {
     // Check if this is a permalink save action
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Checking for permalink_structure POST is safe, no data modification based on input value
     if (isset($_POST['permalink_structure']) && current_user_can('manage_options')) {
         delete_transient('lazychat_rest_api_check');
         delete_option('lazychat_rest_api_notice_dismissed');
