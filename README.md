@@ -4,7 +4,7 @@ Tags: woocommerce, customer support, ai, chatbot, webhook
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.4.16
+Stable tag: 1.4.17
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -95,6 +95,10 @@ Used for real-time webhook delivery for product updates. Receives the same produ
 All data transmission uses secure HTTPS connections with bearer token authentication.
 
 == Changelog ==
+
+= 1.4.16 =
+* Improved security: sanitized all $_SERVER inputs and enhanced code quality
+* Updated external services documentation for WordPress plugin guidelines compliance
 
 = 1.4.10 =
 * Fixed rand() to use wp_rand() for WordPress coding standards
