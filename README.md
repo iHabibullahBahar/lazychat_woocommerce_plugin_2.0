@@ -1,10 +1,10 @@
 === LazyChat ===
 Contributors: lazychat
-Tags: woocommerce, customer support, ai, chatbot, webhook
+Tags: lazychat, message automation, whatsapp automation, customer support, woocommerce
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.4.18
+Stable tag: 1.4.19
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -14,30 +14,32 @@ Connect your WooCommerce store with LazyChat's AI-powered customer support platf
 
 LazyChat integrates your WooCommerce store with LazyChat's AI-powered customer support platform, enabling automatic synchronization of products, orders, and customers.
 
+**Developed by [LazyChat](https://lazychat.io)**
+
 **Features:**
 
 * Automatic product synchronization with LazyChat
 * Order creation and management via REST API
 * Customer data integration
-* Secure API connection with bearer token authentication
+* Secure API connection
 * Category and attribute management
 * Product variant support
-* Comprehensive error logging
 
 **How it works:**
 
 1. Install and activate the plugin
 2. Navigate to WooCommerce > LazyChat Settings
-3. Enter your Shop ID and Bearer Token from LazyChat
-4. Connect and start syncing your data
+3. Login with your LazyChat account
+4. Click the Sync button to sync your products
 
 == Installation ==
 
-1. Upload the plugin files to the `/wp-content/plugins/lazychat` directory, or install the plugin through the WordPress plugins screen directly
-2. Activate the plugin through the 'Plugins' screen in WordPress
-3. Navigate to WooCommerce > LazyChat Settings to configure the plugin
-4. Enter your Shop ID and Bearer Token provided by LazyChat
-5. Click "Connect to LazyChat" to establish the connection
+1. Go to Plugins > Add New in your WordPress dashboard
+2. Search for "LazyChat"
+3. Click "Install Now" and then "Activate"
+4. Navigate to WooCommerce > LazyChat Settings
+5. Login with your LazyChat account (email and password from app.lazychat.io)
+6. Click the Sync button to sync your products
 
 == Frequently Asked Questions ==
 
@@ -49,9 +51,9 @@ LazyChat is an AI-powered customer support platform that helps WooCommerce store
 
 Yes, you need an active LazyChat account to use this plugin. Sign up at https://app.lazychat.io
 
-= Where do I find my Shop ID and Bearer Token? =
+= How do I connect my store? =
 
-You can find your Shop ID and Bearer Token in your LazyChat account dashboard under the WooCommerce integration section.
+Simply login with your LazyChat account email and password in the plugin settings. Your store will connect automatically.
 
 = Does this plugin work with WooCommerce product variations? =
 
@@ -59,61 +61,30 @@ Yes, the plugin fully supports WooCommerce product variations and attributes.
 
 == External services ==
 
-This plugin connects to LazyChat's external servers to provide AI-powered customer support functionality for your WooCommerce store.
-
-= LazyChat API =
+This plugin connects to LazyChat servers to sync your WooCommerce data.
 
 **Service URL:** https://app.lazychat.io
-
-This plugin sends the following data to LazyChat servers:
-
-* **Product information** (names, prices, images, descriptions, SKUs, stock status) - sent when products are created, updated, or deleted via webhooks
-* **Store credentials** - sent during authentication to establish secure connection
-* **Site information** (WordPress version, WooCommerce version, plugin version) - sent for compatibility and debugging purposes
-
-**When data is transmitted:**
-
-* When you login and connect your WooCommerce store
-* When product webhooks are triggered (automatic sync on create/update/delete)
-* When you manually sync products from the settings page
-* When the plugin settings page is loaded (connection verification)
-* When the plugin status is toggled on/off
-
-= LazyChat Serverless Webhooks =
-
-**Service URL:** https://serverless.lazychat.io
-
-Used for real-time webhook delivery for product updates. Receives the same product data as described above.
-
-= Service Provider =
-
-**LazyChat** - AI-powered customer support platform
 
 * [Terms of Service](https://app.lazychat.io/legal/terms-and-conditions)
 * [Privacy Policy](https://app.lazychat.io/legal/privacy-policy)
 
-All data transmission uses secure HTTPS connections with bearer token authentication.
-
 == Changelog ==
 
+= 1.4.19 =
+* Improved README and plugin documentation
+* Updated installation instructions
+
 = 1.4.16 =
-* Improved security: sanitized all $_SERVER inputs and enhanced code quality
-* Updated external services documentation for WordPress plugin guidelines compliance
+* Security improvements
+* Code quality enhancements
 
 = 1.4.10 =
-* Fixed rand() to use wp_rand() for WordPress coding standards
-* Wrapped error_log() calls with WP_DEBUG checks
-* Added translator comments for i18n compliance
-* Code cleanup and optimization
+* Bug fixes and optimizations
 
 = 1.3.39 =
-* Fixed nonce sanitization for WordPress.org compliance
-* Removed external file dependencies
-* Added translator comments for i18n compliance
-* Code cleanup and optimization
-* Improved error handling
+* Stability improvements
 
 == Upgrade Notice ==
 
-= 1.4.10 =
-WordPress coding standards improvements and security enhancements.
+= 1.4.19 =
+Updated documentation and installation flow.

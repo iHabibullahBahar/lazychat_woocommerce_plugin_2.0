@@ -115,27 +115,37 @@ if [ ! -d "$SVN_DIR/assets" ]; then
     
     # Create a README for assets folder with instructions
     cat > "$SVN_DIR/assets/README.txt" << 'EOF'
-WordPress.org Plugin Assets
-============================
+WordPress.org Plugin Assets - LazyChat
+========================================
 
-Place the following files in this folder for your plugin page:
+Required assets for your plugin page on WordPress.org
 
-BANNERS:
-- banner-772x250.png     (Standard banner)
-- banner-1544x500.png    (Retina/HiDPI banner)
+ICONS (Required)
+----------------
+icon-128x128.png     Standard icon (128x128 pixels)
+icon-256x256.png     Retina icon (256x256 pixels)
+icon.svg             Optional SVG version
 
-ICONS:
-- icon-128x128.png       (Standard icon)
-- icon-256x256.png       (Retina/HiDPI icon)
-- icon.svg               (Optional SVG icon)
+BANNERS (Required)
+------------------
+banner-772x250.png   Standard banner
+banner-1544x500.png  Retina banner (2x)
 
-SCREENSHOTS:
-- screenshot-1.png       (First screenshot)
-- screenshot-2.png       (Second screenshot)
-- etc.
+SCREENSHOTS (Optional but recommended)
+--------------------------------------
+screenshot-1.png     Matches "1." in readme.txt Screenshots section
+screenshot-2.png     Matches "2." in readme.txt Screenshots section
+(add more as needed)
 
-Note: These assets are for the WordPress.org plugin page only,
-not included in the plugin download.
+FILE REQUIREMENTS
+-----------------
+- Format: PNG or JPG (PNG recommended for icons)
+- Icons: Square, transparent background works best
+- Banners: No important content in outer 10% (may be cropped)
+- Screenshots: Any reasonable size, will be resized automatically
+
+Note: Assets folder is separate from plugin code.
+Changes here only affect your WordPress.org plugin page.
 EOF
     echo -e "${GREEN}   ✓ Created assets/README.txt with instructions${NC}"
 else
