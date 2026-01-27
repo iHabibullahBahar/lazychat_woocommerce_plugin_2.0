@@ -353,6 +353,40 @@ class LazyChat_Ajax_Handlers {
 
         $api_registration = $this->register_lazychat_store($credentials);
 
+        // Check if store registration failed - if so, revert the saved options and return error
+        // In debug mode, log the error but allow login to proceed for development purposes
+        if (!$api_registration['success']) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                // Debug mode: Log the error but allow login to proceed
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+                error_log('[LazyChat] Store registration failed (ignored in debug mode): ' . $api_registration['message']);
+            } else {
+                // Production mode: Revert the saved options since registration failed
+                delete_option('lazychat_bearer_token');
+                delete_option('lazychat_token_saved_time');
+                delete_option('lazychat_selected_shop_id');
+                delete_option('lazychat_selected_shop_name');
+                delete_option('lazychat_plugin_active');
+                delete_option('lazychat_wc_consumer_key');
+                delete_option('lazychat_wc_consumer_secret');
+                delete_option('lazychat_wc_last_access');
+                
+                $this->log_error('Select shop failed: Store registration with LazyChat failed', array(
+                    'shop_id' => $shop_id,
+                    'error' => $api_registration['message'],
+                ), 'select_shop.error');
+                
+                wp_send_json_error(array(
+                    'message' => sprintf(
+                        /* translators: %s: error message */
+                        __('Failed to connect store to LazyChat: %s', 'lazychat'),
+                        $api_registration['message']
+                    ),
+                ));
+                return;
+            }
+        }
+
         $success_message = __('✅ Shop connected successfully and token saved.', 'lazychat');
         if (!empty($shop_name)) {
             /* translators: %s: shop name */
