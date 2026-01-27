@@ -544,6 +544,23 @@ class LazyChat_REST_API {
                 ),
             )
         ));
+        
+        // Get WooCommerce shipping settings endpoint
+        register_rest_route($this->namespace, '/settings/shipping', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'get_shipping_settings'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'consumer_key' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+                'consumer_secret' => array(
+                    'default' => '',
+                    'sanitize_callback' => 'sanitize_text_field'
+                ),
+            )
+        ));
     }
     
     /**
@@ -1366,6 +1383,43 @@ class LazyChat_REST_API {
         );
         
         return rest_ensure_response($response_data);
+    }
+    
+    /**
+     * Get WooCommerce shipping settings
+     * Returns the shipping destination setting (billing, shipping, or billing_only)
+     */
+    public function get_shipping_settings($request) {
+        // Check if WooCommerce is active
+        if (!class_exists('WooCommerce')) {
+            return new WP_Error(
+                'woocommerce_not_active',
+                __('WooCommerce is not active.', 'lazychat'),
+                array('status' => 400)
+            );
+        }
+        
+        // Get the shipping destination setting from WooCommerce options
+        // This is stored in woocommerce_ship_to_destination option
+        // Possible values: 'shipping' (Default to shipping address), 
+        //                  'billing' (Default to billing address only),
+        //                  'billing_only' (Force ship to billing address)
+        $ship_to_destination = get_option('woocommerce_ship_to_destination', 'billing');
+        
+        // Also get related shipping settings for completeness
+        $enable_shipping = get_option('woocommerce_ship_to_countries', '');
+        $specific_countries = get_option('woocommerce_specific_ship_to_countries', array());
+        
+        return rest_ensure_response(array(
+            'success' => true,
+            'value' => $ship_to_destination,
+            'settings' => array(
+                'ship_to_destination' => $ship_to_destination,
+                'ship_to_countries' => $enable_shipping,
+                'specific_ship_to_countries' => $specific_countries,
+            ),
+            'plugin_version' => defined('LAZYCHAT_VERSION') ? LAZYCHAT_VERSION : '1.0.0',
+        ));
     }
 }
 
