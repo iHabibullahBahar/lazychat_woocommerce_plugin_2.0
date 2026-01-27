@@ -734,14 +734,10 @@ class LazyChat_REST_API {
             );
         }
         
-        // Check if plugin is active
-        if (get_option('lazychat_plugin_active') !== 'Yes') {
-            return new WP_Error(
-                'rest_forbidden',
-                __('Plugin is not active.', 'lazychat'),
-                array('status' => 403)
-            );
-        }
+        // Note: We don't check lazychat_plugin_active here because:
+        // 1. WooCommerce credentials are sufficient for authentication
+        // 2. During initial registration, the plugin isn't marked as active yet
+        // 3. The test-connection endpoint needs to work before plugin is fully activated
         
         return true;
     }

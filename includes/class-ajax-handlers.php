@@ -1129,6 +1129,45 @@ class LazyChat_Ajax_Handlers {
 
         $error_message = isset($data['message']) ? $data['message'] : $response_body;
 
+        // Check if this is a Cloudflare/WAF blocking issue requiring whitelisting
+        if (isset($data['whitelist_required']) && $data['whitelist_required'] === true) {
+            $whitelist_info = isset($data['whitelist_info']) ? $data['whitelist_info'] : array();
+            
+            // Use the display_message from the backend if available, otherwise build a fallback message
+            if (!empty($whitelist_info['display_message'])) {
+                $whitelist_message = $whitelist_info['display_message'];
+            } else {
+                // Fallback message if display_message is not provided
+                $ips = isset($whitelist_info['ips']) ? implode(', ', $whitelist_info['ips']) : '';
+                $domains = isset($whitelist_info['domains']) ? implode(', ', $whitelist_info['domains']) : '';
+                $instructions = isset($whitelist_info['instructions']) ? $whitelist_info['instructions'] : '';
+                
+                $whitelist_message = __('Your website security is blocking our API requests.', 'lazychat');
+                $whitelist_message .= "\n\n";
+                
+                if (!empty($ips)) {
+                    /* translators: %s: comma-separated list of IP addresses */
+                    $whitelist_message .= sprintf(__('IPs to whitelist: %s', 'lazychat'), $ips) . "\n";
+                }
+                
+                if (!empty($domains)) {
+                    /* translators: %s: comma-separated list of domains */
+                    $whitelist_message .= sprintf(__('Domains to whitelist: %s', 'lazychat'), $domains) . "\n";
+                }
+                
+                if (!empty($instructions)) {
+                    $whitelist_message .= "\n" . $instructions;
+                }
+            }
+            
+            return array(
+                'success' => false,
+                'message' => $whitelist_message,
+                'whitelist_required' => true,
+                'whitelist_info' => $whitelist_info,
+            );
+        }
+
         return array(
             'success' => false,
             'message' => sprintf(
