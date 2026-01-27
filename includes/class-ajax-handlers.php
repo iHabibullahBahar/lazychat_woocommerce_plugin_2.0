@@ -338,6 +338,7 @@ class LazyChat_Ajax_Handlers {
         }
 
         update_option('lazychat_bearer_token', $auth_token);
+        update_option('lazychat_token_saved_time', time()); // Track when token was saved for grace period
         update_option('lazychat_selected_shop_id', $shop_id);
         update_option('lazychat_selected_shop_name', $shop_name);
         update_option('lazychat_plugin_active', 'Yes'); // Auto-activate when shop is connected

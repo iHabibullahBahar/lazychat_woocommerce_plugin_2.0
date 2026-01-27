@@ -101,13 +101,20 @@ class LazyChat_Admin {
     
     /**
      * Check connection to LazyChat on every settings page visit
-     * Sends connection check event notification and logout if fails
+     * Sends connection check event notification (does not logout on failure to avoid false positives)
      */
     private function check_connection_on_page_load() {
         // Get bearer token
         $bearer_token = get_option('lazychat_bearer_token', '');
         if (empty($bearer_token)) {
             return; // Not logged in, no need to check
+        }
+        
+        // Grace period: Skip connection check for 30 seconds after login/token save
+        // This prevents logout during the page reload after successful login
+        $last_token_save = get_option('lazychat_token_saved_time', 0);
+        if (!empty($last_token_save) && (time() - (int)$last_token_save) < 30) {
+            return; // Within grace period, skip check
         }
         
         // Send connection check event with blocking request to check response
@@ -148,24 +155,50 @@ class LazyChat_Admin {
         ));
         
         // Check if connection was successful
-        if (!is_wp_error($response)) {
-            $response_code = wp_remote_retrieve_response_code($response);
-            
-            if ($response_code === 200) {
-                // Connection successful
-                return;
+        if (is_wp_error($response)) {
+            // Network error - log but don't logout (could be temporary)
+            if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+                error_log('[LazyChat] Connection check failed (network error): ' . $response->get_error_message());
             }
+            return; // Don't logout on network errors
         }
         
-        // Connection failed - logout user
-        $this->force_logout();
+        $response_code = wp_remote_retrieve_response_code($response);
+        
+        // Accept any 2xx response as successful
+        if ($response_code >= 200 && $response_code < 300) {
+            // Connection successful
+            return;
+        }
+        
+        // Only logout on explicit authentication failures (401 Unauthorized)
+        if ($response_code === 401) {
+            if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+                error_log('[LazyChat] Connection check failed: 401 Unauthorized - logging out user');
+            }
+            $this->force_logout();
+            return;
+        }
+        
+        // For other error codes (4xx, 5xx), log but don't logout
+        // This prevents logout due to temporary server issues
+        if (defined('WP_DEBUG') && WP_DEBUG && defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Intentional debug logging
+            error_log('[LazyChat] Connection check returned non-success code: ' . $response_code . ' (not logging out)');
+        }
     }
     
     /**
      * Force logout by clearing LazyChat credentials
      */
     private function force_logout() {
+        // Send logout event before clearing credentials
+        $this->send_logout_event('connection_check_failed');
+        
         delete_option('lazychat_bearer_token');
+        delete_option('lazychat_token_saved_time');
         delete_option('lazychat_selected_shop_id');
         delete_option('lazychat_selected_shop_name');
         delete_option('lazychat_plugin_active');
@@ -173,6 +206,58 @@ class LazyChat_Admin {
         // Redirect to settings page to show login form
         wp_safe_redirect(admin_url('options-general.php?page=lazychat_settings&connection_failed=1'));
         exit;
+    }
+    
+    /**
+     * Send logout event to LazyChat API
+     * 
+     * @param string $reason Reason for logout (e.g., 'connection_check_failed', 'user_initiated', 'token_expired')
+     */
+    private function send_logout_event($reason = 'unknown') {
+        $bearer_token = get_option('lazychat_bearer_token', '');
+        $shop_id = get_option('lazychat_selected_shop_id', '');
+        
+        // Can't send event without token
+        if (empty($bearer_token)) {
+            return;
+        }
+        
+        $api_url = 'https://app.lazychat.io/api/woocommerce-plugin/events';
+        
+        $payload = array(
+            'event_type' => 'settings.logout',
+            'event_data' => array(
+                'reason' => $reason,
+                'user_id' => get_current_user_id(),
+                'user_email' => wp_get_current_user()->user_email,
+                'logout_time' => current_time('mysql')
+            ),
+            'site_info' => array(
+                'site_url' => get_site_url(),
+                'site_name' => get_bloginfo('name'),
+                'wordpress_version' => get_bloginfo('version'),
+                'woocommerce_version' => defined('WC_VERSION') ? WC_VERSION : 'N/A',
+                'plugin_version' => LAZYCHAT_VERSION,
+                'php_version' => phpversion(),
+                'timestamp' => current_time('mysql')
+            )
+        );
+        
+        // Non-blocking request - we don't wait for response since we're logging out anyway
+        wp_remote_post($api_url, array(
+            'body' => wp_json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $bearer_token,
+                'Content-Type' => 'application/json',
+                'X-Event-Type' => 'settings.logout',
+                'X-Plugin-Version' => LAZYCHAT_VERSION,
+                'X-Lazychat-Shop-Id' => $shop_id,
+                'X-Event-Timestamp' => time()
+            ),
+            'timeout' => 5,
+            'blocking' => false, // Non-blocking - don't wait for response
+            'data_format' => 'body'
+        ));
     }
     
     /**
