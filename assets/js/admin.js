@@ -397,7 +397,7 @@ jQuery(document).ready(function($) {
                     const errorMessage = response && response.data && response.data.message
                         ? response.data.message
                         : '❌ Failed to connect the selected shop. Please try again.';
-                    $message.addClass('notice-error').text(errorMessage);
+                    $message.addClass('notice-error').html(errorMessage);
                 }
             },
             error: function(xhr, status, error) {
