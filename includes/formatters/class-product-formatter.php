@@ -38,11 +38,11 @@ class LazyChat_Product_Formatter {
                 $desc = $product->get_description();
                 
                 if (!empty($short)) {
-                    $parts[] = "Short Description\n" . $short;
+                    $parts[] = "\n" . $short;
                 }
                 
                 if (!empty($desc)) {
-                    $parts[] = "Description\n" . $desc;
+                    $parts[] = "\n" . $desc;
                 }
                 
                 return implode("\n\n", $parts);
