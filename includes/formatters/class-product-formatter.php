@@ -32,7 +32,21 @@ class LazyChat_Product_Formatter {
             'type' => $product->get_type(),
             'status' => $product->get_status(),
             'featured' => $product->get_featured(),
-            'description' => trim($product->get_short_description() . "\n" . $product->get_description()),
+            'description' => (function() use ($product) {
+                $parts = [];
+                $short = $product->get_short_description();
+                $desc = $product->get_description();
+                
+                if (!empty($short)) {
+                    $parts[] = "Short Description\n" . $short;
+                }
+                
+                if (!empty($desc)) {
+                    $parts[] = "Description\n" . $desc;
+                }
+                
+                return implode("\n\n", $parts);
+            })(),
             'short_description' => $product->get_short_description(),
             'sku' => $product->get_sku(),
             'price' => $product->get_price() ?: '0',
