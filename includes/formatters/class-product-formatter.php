@@ -32,7 +32,7 @@ class LazyChat_Product_Formatter {
             'type' => $product->get_type(),
             'status' => $product->get_status(),
             'featured' => $product->get_featured(),
-            'description' => $product->get_description(),
+            'description' => trim($product->get_short_description() . "\n" . $product->get_description()),
             'short_description' => $product->get_short_description(),
             'sku' => $product->get_sku(),
             'price' => $product->get_price() ?: '0',

@@ -4,7 +4,7 @@ Tags: lazychat, message automation, whatsapp automation, customer support, wooco
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.4.25
+Stable tag: 1.4.26
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
